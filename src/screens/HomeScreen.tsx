@@ -120,19 +120,9 @@ export function HomeScreen({ navigate }: { navigate: (r: Route) => void }) {
         */}
         <Card className="card--flat">
           <h2 style={{ marginBottom: 6 }}>Bệnh án Y học gia đình cho người học</h2>
-          <p className="small" style={{ margin: 0 }}>
-            Ghi chú nhanh tại phòng khám → bệnh án có cấu trúc → tự kiểm tra mức đầy đủ theo trình
-            độ → phả hệ → xuất PDF nộp giảng viên.
-          </p>
-          <div className="chips" style={{ marginTop: 12 }}>
-            <Badge tone="ok">Không cần đăng nhập</Badge>
-            <Badge tone="ok">Lưu trên máy bạn</Badge>
-            <Badge tone="ok">Chạy được khi mất mạng</Badge>
-            <Badge tone="warn">Công cụ học tập, không phải EMR bệnh viện</Badge>
-          </div>
-          <p className="tiny muted" style={{ margin: '12px 0 0' }}>
-            Mọi ca mẫu trong ứng dụng đều là <strong>bệnh nhân giả lập</strong>. Chỉ dùng dữ liệu giả lập
-            hoặc đã ẩn danh — ứng dụng không có chỗ nhập mã số bệnh nhân.
+          <p className="small muted" style={{ margin: 0 }}>
+            Ghi chú nhanh tại phòng khám → bệnh án có cấu trúc → xuất PDF nộp giảng viên. Ca mẫu là
+            bệnh nhân giả lập.
           </p>
           <div className="btn-row" style={{ marginTop: 14 }}>
             <button

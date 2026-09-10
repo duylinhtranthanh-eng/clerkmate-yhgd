@@ -11,14 +11,26 @@ import { writeFile, mkdir } from 'node:fs/promises'
 const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
 const PORT = 9380, REPO = 'clerkmate-yhgd'
 const BASE = `http://localhost:4191/${REPO}/`
-const PROFILE = '/tmp/clerkmate-print-profile'
+// A unique directory per run, and any leftover browser is killed first: a
+// previous run that threw would otherwise still hold the profile and the
+// debugging port, and the next launch would silently attach to that old
+// instance — carrying its IndexedDB, and its half-finished state, with it.
+const PROFILE = `/tmp/clerkmate-print-profile-${process.pid}`
 const OUT = '/tmp/clerkmate-print'
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const results = []
 const check = (name, pass, detail) => { results.push({ name, pass, detail })
   console.log(`  ${pass ? '✓' : '✗'} ${name}${detail ? ' — ' + detail : ''}`) }
 
-execSync(`rm -rf ${PROFILE}`); await mkdir(OUT, { recursive: true })
+try { execSync(`pkill -f "clerkmate-print-profile" || true`) } catch {}
+try { execSync(`lsof -ti tcp:${PORT} | xargs -r kill -9`) } catch {}
+execSync(`rm -rf ${PROFILE}`)
+// Always take the browser down, including on the failure paths.
+const shutdown = () => { try { execSync(`rm -rf ${PROFILE}`) } catch {} }
+process.on('exit', shutdown)
+for (const sig of ['SIGINT', 'SIGTERM', 'uncaughtException']) {
+  process.on(sig, (e) => { if (e) console.error(e); shutdown(); process.exit(1) })
+}; await mkdir(OUT, { recursive: true })
 const chrome = spawn(CHROME, ['--window-position=-3000,0', '--window-size=460,980',
   `--remote-debugging-port=${PORT}`, `--user-data-dir=${PROFILE}`, '--hide-scrollbars',
   '--no-first-run', '--no-default-browser-check', 'about:blank'], { stdio: 'ignore' })

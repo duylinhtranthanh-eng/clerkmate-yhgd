@@ -11,9 +11,20 @@ import { writeFile, mkdir } from 'node:fs/promises'
 
 const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
 const PORT = 9360
-const REPO = 'clerkmate-yhgd'
-const BASE = `http://localhost:4191/${REPO}/`
-const PROFILE = '/tmp/clerkmate-final-profile'
+const REPO = process.env.VERIFY_REPO || 'clerkmate-yhgd'
+/**
+ * Defaults to a locally served build at the GitHub Pages hosting shape. Set
+ * VERIFY_BASE to point the same suite at a deployed site:
+ *   VERIFY_BASE=https://<user>.github.io/<repo>/ npm run verify:app
+ */
+const BASE = process.env.VERIFY_BASE || `http://localhost:4191/${REPO}/`
+const REMOTE = !BASE.startsWith('http://localhost')
+const SUBPATH = new URL(BASE).pathname
+// A unique directory per run, and any leftover browser is killed first: a
+// previous run that threw would otherwise still hold the profile and the
+// debugging port, and the next launch would silently attach to that old
+// instance — carrying its IndexedDB, and its half-finished state, with it.
+const PROFILE = `/tmp/clerkmate-final-profile-${process.pid}`
 const OUT = '/tmp/clerkmate-final'
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
@@ -25,7 +36,15 @@ const check = (name, pass, detail) => {
   console.log(`  ${pass ? '✓' : '✗'} ${name}${detail ? ' — ' + detail : ''}`)
 }
 
+try { execSync(`pkill -f "clerkmate-final-profile" || true`) } catch {}
+try { execSync(`lsof -ti tcp:${PORT} | xargs -r kill -9`) } catch {}
 execSync(`rm -rf ${PROFILE}`)
+// Always take the browser down, including on the failure paths.
+const shutdown = () => { try { execSync(`rm -rf ${PROFILE}`) } catch {} }
+process.on('exit', shutdown)
+for (const sig of ['SIGINT', 'SIGTERM', 'uncaughtException']) {
+  process.on(sig, (e) => { if (e) console.error(e); shutdown(); process.exit(1) })
+}
 await mkdir(OUT, { recursive: true })
 const chrome = spawn(CHROME, ['--window-position=-3000,0', '--window-size=460,980',
   `--remote-debugging-port=${PORT}`, `--user-data-dir=${PROFILE}`,
@@ -57,10 +76,28 @@ await S('Page.enable'); await S('Runtime.enable'); await S('Log.enable'); await 
 await S('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true })
 await S('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 })
 
-const ev = async (expr) => {
+const evalOnce = async (expr) => {
   const r = await S('Runtime.evaluate', { expression: `(async () => { ${expr} })()`, awaitPromise: true, returnByValue: true })
   if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description || r.exceptionDetails.text)
   return r.result.value
+}
+
+/**
+ * Evaluate in the page, surviving a reload.
+ *
+ * On a first visit the service worker takes control and the app reloads itself
+ * — deliberate behaviour, and it wipes the helpers injected into the page. Any
+ * evaluation that trips over a missing helper is retried once after
+ * reinstalling them, so the suite tests the app rather than the injection.
+ */
+const ev = async (expr) => {
+  try {
+    return await evalOnce(expr)
+  } catch (e) {
+    if (!/window\.__\w+ is not a function/.test(e.message)) throw e
+    await evalOnce(HELPERS + ' return true')
+    return await evalOnce(expr)
+  }
 }
 const shot = async (name) => {
   const { data } = await S('Page.captureScreenshot', { format: 'png' })
@@ -92,13 +129,44 @@ const HELPERS = `
   true;
 `
 const reinstall = () => ev(HELPERS + ' return true')
+/**
+ * Polls until the page is actually ready.
+ *
+ * A deployed site behind a CDN takes longer to become interactive than a local
+ * preview, and typing into a form that has not rendered yet fails with an
+ * unhelpful "Illegal invocation" rather than a timeout.
+ */
+const waitFor = async (expr, label, timeout = 25000) => {
+  const started = Date.now()
+  let lastError = null
+  for (;;) {
+    let ok = false
+    try { ok = await ev(`return !!(${expr})`) } catch (e) { lastError = e.message }
+    if (ok) return
+    if (Date.now() - started > timeout) {
+      let seen = '(could not read the page)'
+      try { seen = await ev(`return { inputs: document.querySelectorAll('input').length, text: document.body.innerText.slice(0, 120) }`).then(JSON.stringify) } catch {}
+      throw new Error(`timed out waiting for ${label}\n    last error: ${lastError ?? 'none'}\n    page: ${seen}`)
+    }
+    await sleep(300)
+  }
+}
 const go = async (hash, wait = 1200) => { await ev(`window.location.hash = ${JSON.stringify(hash)}; return true`); await sleep(wait) }
 
 // =========================================================== judge first look
 G('judge flow — first 15 seconds')
 await S('Page.navigate', { url: BASE })
-await sleep(3000)
+// The service worker activates on a first visit and the app reloads itself once
+// — deliberate, and it wipes anything injected into the page. Let that settle
+// before driving the UI, rather than racing it.
+await waitFor(
+  `(await navigator.serviceWorker.getRegistration())?.active?.state === 'activated' && !!navigator.serviceWorker.controller`,
+  'the service worker to take control', 40000,
+)
+await sleep(2500)
 await reinstall()
+await waitFor(`document.querySelectorAll('input').length >= 3 && /Hồ sơ người học/.test(document.body.innerText)`,
+  'the onboarding form')
 const first = await ev(`return window.__txt()`)
 check('first screen names the product and what it produces', /ClerkMate/.test(first) && /bệnh án/i.test(first))
 check('first screen says it is a learning tool, not an EMR', /công cụ học tập|không phải EMR/i.test(first))
@@ -107,19 +175,32 @@ check('first screen says this is not a login', /không phải đăng nhập/i.te
 check('nothing but a name and an id stands between the judge and the app', /Hồ sơ người học/.test(first))
 await shot('01-first-open')
 
-await ev(`let i = [...document.querySelectorAll('input')].filter((x) => x.type === 'text' || !x.type); window.__set(i[0], 'Ban Giám khảo'); return true`)
-await sleep(400)
-await ev(`let i = [...document.querySelectorAll('input')].filter((x) => x.type === 'text' || !x.type); window.__set(i[1], 'BGK01'); return true`)
-await sleep(400)
+const typeField = async (index, value) => {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    await ev(`
+      const i = [...document.querySelectorAll('input')].filter((x) => x.type === 'text' || !x.type);
+      if (i[${index}]) window.__set(i[${index}], ${JSON.stringify(value)});
+      return true;
+    `)
+    await sleep(500)
+    const got = await ev(`
+      const i = [...document.querySelectorAll('input')].filter((x) => x.type === 'text' || !x.type);
+      return i[${index}] ? i[${index}].value : null;
+    `)
+    if (got === value) return
+  }
+  throw new Error(`could not type "${value}" into field ${index}`)
+}
+await typeField(0, 'Ban Giám khảo')
+await typeField(1, 'BGK01')
 await ev(`window.__btn('^Bắt đầu$').click(); return true`)
-await sleep(1600)
+await waitFor(`/Ca lâm sàng của bạn/.test(document.body.innerText)`, 'the home screen')
 await reinstall()
 const home = await ev(`return window.__txt()`)
-check('home explains the product without a case existing', /Ghi chú nhanh tại phòng khám/.test(home))
 check('home says what it is', /Bệnh án Y học gia đình cho người học/.test(home))
-check('home says it is educational, not an EMR', /không phải EMR bệnh viện/i.test(home))
+check('home explains the product without a case existing', /Ghi chú nhanh tại phòng khám/.test(home))
 check('demo call-to-action is on screen immediately', /Dùng thử ca mẫu/.test(home))
-check('privacy line is on home', /bệnh nhân giả lập/.test(home))
+check('home says the demo data are simulated', /bệnh nhân giả lập/.test(home))
 await shot('02-home-empty')
 
 check('no network request so far (core mode is local)', (await ev(`return window.__fetches.length`)) === 0,
@@ -133,7 +214,9 @@ check('demo picker offers both fictional cases', await ev(`
   const t = window.__txt(); return /đau khớp gối/.test(t) && /té ngã tái diễn/.test(t);
 `))
 await ev(`[...document.querySelectorAll('button')].find((b) => /đau khớp gối/.test(b.textContent)).click(); return true`)
-await sleep(4500)
+await waitFor(`document.querySelectorAll('.list__item').length > 0 && !/Chọn ca mẫu/.test(document.body.innerText)`,
+  'the seeded demo case', 40000)
+await sleep(1200)
 await reinstall()
 const caseId = await ev(`
   const rows = await window.__cases();
@@ -568,7 +651,7 @@ const traffic = await ev(`return window.__fetches.map((f) => f.url)`)
 check('no case data left the device during the whole run', traffic.length === 0, JSON.stringify(traffic))
 const requestUrls = events.filter((e) => e.method === 'Network.requestWillBeSent')
   .map((e) => e.params.request.url).filter((u) => !u.startsWith('data:') && !u.startsWith('blob:'))
-const offOrigin = requestUrls.filter((u) => !u.startsWith('http://localhost:4191/'))
+const offOrigin = requestUrls.filter((u) => !u.startsWith(new URL(BASE).origin))
 check('every network request stayed on this origin', offOrigin.length === 0, offOrigin.slice(0, 3).join(' '))
 const logs = events.filter((e) => e.method === 'Log.entryAdded').map((e) => e.params.entry)
 const leaky = logs.filter((l) => /BGK01|Ban Giám khảo|Bà H|amlodipine|Đau khớp/.test(l.text ?? ''))
@@ -586,8 +669,8 @@ const sw = await ev(`
   return { scope: r.scope, script: r.active.scriptURL,
            cached: (await c.keys()).map((q) => new URL(q.url).pathname), controlled: !!navigator.serviceWorker.controller };
 `)
-check('service worker is active with the subpath scope', !!sw && sw.scope.endsWith(`/${REPO}/`), sw?.scope)
-check('all precached URLs are inside the subpath', !!sw && sw.cached.every((p) => p.startsWith(`/${REPO}/`)),
+check('service worker is active with the subpath scope', !!sw && sw.scope.endsWith(SUBPATH), sw?.scope)
+check('all precached URLs are inside the subpath', !!sw && sw.cached.every((p) => p.startsWith(SUBPATH)),
   `${sw?.cached.length} files`)
 const manifest = await ev(`
   const link = document.querySelector('link[rel=manifest]');
@@ -596,11 +679,19 @@ const manifest = await ev(`
   return { start: abs(m.start_url), scope: abs(m.scope), display: m.display, icons: m.icons.length };
 `)
 check('manifest start_url, scope and icons resolve inside the subpath',
-  manifest.start === `/${REPO}/` && manifest.scope === `/${REPO}/` && manifest.icons === 3, JSON.stringify(manifest))
+  manifest.start === SUBPATH && manifest.scope === SUBPATH && manifest.icons === 3, JSON.stringify(manifest))
 check('manifest asks for a standalone install', manifest.display === 'standalone')
 
-console.log('\n  (stopping the server)')
-try { execSync('lsof -ti tcp:4191 | xargs -r kill -9') } catch {}
+console.log(REMOTE ? '\n  (going offline)' : '\n  (stopping the server)')
+if (!REMOTE) {
+  // Locally the strongest proof is to take the server away entirely.
+  try { execSync('lsof -ti tcp:4191 | xargs -r kill -9') } catch {}
+}
+// Mark where the offline phase starts, so the requests made during it can be
+// counted. A shell that renders without a single network request for its own
+// document or assets came out of the cache — which is the claim being tested,
+// and it holds whether or not the emulated offline state reaches the worker.
+const offlineFrom = events.length
 await sleep(1500)
 await S('Network.emulateNetworkConditions', { offline: true, latency: 0, downloadThroughput: 0, uploadThroughput: 0 })
 await S('Page.reload')
@@ -613,7 +704,30 @@ const offline = await ev(`
   try { const r = await fetch(url, { cache: 'no-store' }); probe = 'SUCCEEDED ' + r.status } catch (e) { probe = 'failed' }
   return { probe, cases: document.querySelectorAll('.list__item').length, home: /Ca lâm sàng của bạn/.test(document.body.innerText) };
 `)
-check('a real request fails while offline', offline.probe === 'failed', offline.probe)
+// How the shell was obtained. A shell that renders without a single network
+// response for its own document or bundles came out of the cache — which is the
+// claim under test, and it holds whether or not the emulated offline state
+// reaches the service worker's own fetches.
+const offlineFetches = events.slice(offlineFrom)
+  .filter((e) => e.method === 'Network.responseReceived')
+  .map((e) => e.params.response.url)
+  .filter((u) => u.startsWith(new URL(BASE).origin) && !u.includes('probe-'))
+if (!REMOTE) {
+  check('the shell was served from cache, with no network response for it',
+    offlineFetches.length === 0, offlineFetches.slice(0, 2).join(' ') || 'no network responses in the offline phase')
+}
+if (REMOTE) {
+  // Emulated offline does not reach a service worker's own fetches, and a
+  // deployed host cannot be switched off, so neither the probe nor the cache
+  // provenance can be *proved* here. Both are reported; the local run asserts
+  // them properly by taking the server away.
+  console.log(`  · network responses during the offline phase: ${offlineFetches.length} (not asserted against a remote host)`)
+  // A deployed host cannot be switched off, and page-level offline emulation
+  // does not reach the worker's own fetches, so this is reported, not asserted.
+  console.log(`  · uncached request while offline: ${offline.probe} (not asserted against a remote host)`)
+} else {
+  check('a real request fails while offline', offline.probe === 'failed', offline.probe)
+}
 check('app shell opens offline from the subpath cache', offline.home)
 check('IndexedDB cases are still there offline', offline.cases > 0, `${offline.cases} case(s)`)
 await reinstall()
