@@ -1,0 +1,32 @@
+ClerkMate
+Copyright (c) 2026 the ClerkMate authors. All rights reserved.
+
+No licence has been granted yet.
+
+This file records the current, accurate legal state rather than pretending to a
+licence that has not been chosen: the source is published so that competition
+judges and the teaching department can read, run and verify it, and no rights to
+copy, modify, redistribute or use it beyond that are granted at this time.
+
+If you want the project reusable, replace this file with a real licence before
+publication. Three options that actually fit this project:
+
+  MIT
+    Shortest path to "anyone may use and adapt this". Appropriate if the aim is
+    for other teaching departments to be able to run and modify ClerkMate.
+
+  Apache-2.0
+    Same permissiveness as MIT plus an explicit patent grant and a requirement
+    that changes be stated. Appropriate if the project may later involve
+    institutional or commercial contributors.
+
+  CC BY-NC-SA 4.0 for the educational content, MIT for the code
+    A split licence. The clinical content — the 66 completeness requirements,
+    the 57 risk factors, the level rules, the demo cases — is teaching material
+    rather than software, and a content licence fits it better than a code one.
+
+Note on the rating scales: PHQ, GAD and Mini-Cog are free to use, and their
+items ship with the app. HADS (Snaith & Zigmond) and ISI (Morin) are licensed
+instruments; ClerkMate deliberately does not reproduce their items and records
+only a score entered from an official form. Whichever licence is chosen for
+ClerkMate does not and cannot extend to those instruments.

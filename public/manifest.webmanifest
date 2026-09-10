@@ -1,0 +1,20 @@
+{
+  "name": "ClerkMate — Bệnh án Y học gia đình",
+  "short_name": "ClerkMate",
+  "description": "Từ ghi chú nhanh đến bệnh án hoàn chỉnh. Ghi nhận bệnh án Y học gia đình ngay trên điện thoại, lưu hoàn toàn trên máy.",
+  "lang": "vi",
+  "dir": "ltr",
+  "start_url": "./",
+  "scope": "./",
+  "id": "clerkmate",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F5F9FA",
+  "theme_color": "#0F9B8E",
+  "categories": ["medical", "education", "productivity"],
+  "icons": [
+    { "src": "./icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "./icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "./icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

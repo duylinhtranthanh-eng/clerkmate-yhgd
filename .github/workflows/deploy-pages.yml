@@ -1,0 +1,77 @@
+# Builds ClerkMate and publishes the static bundle to GitHub Pages.
+#
+# GitHub Pages is the primary production deployment. This workflow has no
+# dependency on Netlify and cannot trigger a Netlify build.
+#
+# No secret and no personal access token: the built-in GITHUB_TOKEN plus the
+# official Pages actions are sufficient. Enable once in the repository under
+# Settings → Pages → Build and deployment → Source: GitHub Actions.
+#
+# Vite is configured with a relative base (`base: './'`), so this same artifact
+# works at a domain root or under a repository subpath. The repository name is
+# never hard-coded anywhere.
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Let a running deployment finish rather than cancelling it half-published.
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # 55 rule checks over the completeness engine, the status machine, the
+      # submission gate and the AI response validator. No browser needed, so it
+      # is stable in CI; a failure here stops the deployment.
+      #
+      # The two browser suites (npm run verify:app / verify:print) are not run
+      # here: they drive a local Chrome through a macOS application path and
+      # need a served build, which is not what a Pages runner provides. They
+      # stay in scripts/verify/ for anyone reproducing the claims locally.
+      - name: Rule checks
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

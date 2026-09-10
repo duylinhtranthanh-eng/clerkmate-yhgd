@@ -1,0 +1,65 @@
+# --- dependencies & build output -------------------------------------------
+node_modules/
+dist/
+dist-ssr/
+*.tsbuildinfo
+
+# --- environment ------------------------------------------------------------
+# `.env.example` IS committed (placeholders only). Real values never are.
+.env
+.env.*
+!.env.example
+*.local
+
+# --- host-specific local state ---------------------------------------------
+# Netlify CLI working folder: holds the linked site id and a built copy of the
+# serverless function. Not needed to build, and host-specific.
+.netlify/
+
+# --- editor / tool / OS ----------------------------------------------------
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.swp
+*.swo
+.claude/
+
+# --- logs -------------------------------------------------------------------
+*.log
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# --- local screenshot scratch ----------------------------------------------
+# Screenshot capture scripts and their logs. The verification harnesses that
+# back the fact sheet live in scripts/verify/ and ARE committed; this directory
+# is only local scratch.
+.shots/
+
+# --- generated share assets ------------------------------------------------
+# QR code + trial guide, regenerated with `node scripts/make-share-qr.mjs`.
+# The QR encodes a specific deployment URL, so it is not source.
+share/
+
+# --- competition submission material (PRIVATE) -----------------------------
+# Working documents for a competition entry: the answers to the entry form,
+# an internal feature audit, a gap list and screenshots. Several files are
+# explicitly marked "KHÔNG NỘP" (internal only). Publishing these before the
+# entry is judged would expose the entry's own answers, so they stay out of the
+# repository by default. Remove this block only as a deliberate decision.
+hoso-du-thi/
+
+# --- exported records / local backups --------------------------------------
+# The app can download a case or a whole-database backup as JSON. Even with
+# fictional patients, these are user data and never belong in the repo.
+ClerkMate_*.json
+ClerkMate_*.pdf
+*-backup-*.json
+/backups/
+/exports/

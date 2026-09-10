@@ -1,0 +1,67 @@
+# Netlify configuration for ClerkMate.
+#
+# The app is a static bundle with no server side, so this file is only about
+# two things: making sure updates actually reach people, and making the privacy
+# claim enforceable rather than just documented.
+
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+# Only one function exists: the proxy that keeps the AI provider key off the
+# browser. Everything else in the app is still static and still runs offline.
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
+# Hash routing means every route is index.html; this only catches typo'd paths.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    # `connect-src 'self'` is the enforcement behind the privacy claim: the app
+    # can reach its own origin and nothing else. No analytics, no third-party
+    # endpoint, no way for a record to be posted somewhere over the network.
+    #
+    # The one same-origin endpoint it may reach is
+    # /.netlify/functions/ai-structure-note — the AI proxy, used only when the
+    # learner has switched note structuring to AI mode in Settings and only for
+    # the quick-note text. Default install never calls it, and the provider key
+    # lives on Netlify, never in the bundle.
+    #
+    # `style-src` allows inline styles because React sets style attributes.
+    Content-Security-Policy = "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "no-referrer"
+    Permissions-Policy = "geolocation=(), microphone=(), camera=(self), interest-cohort=()"
+
+# Filenames are content-hashed, so these can be cached forever.
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# The service worker must be revalidated every time, or a stale copy pins the
+# app to an old build and no update ever arrives.
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
+  for = "/manifest.webmanifest"
+  [headers.values]
+    Cache-Control = "public, max-age=3600"
+    Content-Type = "application/manifest+json; charset=utf-8"
