@@ -37,9 +37,10 @@ export const LEVELS: Record<LearnerLevel, LevelDef> = {
   Y2: {
     id: 'Y2',
     label: 'Y2 — Tiền lâm sàng',
-    description: 'Tập trung vào kỹ năng hỏi bệnh cơ bản và đo sinh hiệu.',
+    description: 'Hỏi bệnh cơ bản, đo sinh hiệu, và đánh giá gia đình bằng APGAR và SCREEM.',
     expects:
-      'Hỏi được lý do đến khám, kể lại được diễn tiến bệnh sử, đo và ghi sinh hiệu, khám cơ bản.',
+      'Hỏi được lý do đến khám, kể lại được diễn tiến bệnh sử, đo và ghi sinh hiệu, khám cơ bản, ' +
+      'và đánh giá được gia đình bằng Family APGAR và SCREEM.',
     extends: null,
     mandatory: [
       'patient.identity',
@@ -48,6 +49,11 @@ export const LEVELS: Record<LearnerLevel, LevelDef> = {
       'history.hpi',
       'exam.vitals',
       'exam.systemsBasic',
+      // Family Medicine's own two instruments. They are what makes this a
+      // family record rather than a short internal-medicine one, so they are
+      // asked for from the first year the student sees a patient.
+      'fm.apgar',
+      'fm.screem',
     ],
     recommended: [
       'patient.social',
@@ -62,9 +68,10 @@ export const LEVELS: Record<LearnerLevel, LevelDef> = {
   Y5: {
     id: 'Y5',
     label: 'Y5 — Lâm sàng YHGĐ',
-    description: 'Bệnh án đầy đủ: cờ đỏ, ICE, tiền căn, cận lâm sàng, chẩn đoán, xử trí.',
+    description: 'Bệnh án đầy đủ: cờ đỏ, ICE, tiền căn, cận lâm sàng, chẩn đoán, xử trí, phả hệ.',
     expects:
-      'Thêm: hỏi cờ đỏ và ICE, khai thác tiền căn và lối sống, đề nghị cận lâm sàng, đặt được chẩn đoán chính và kế hoạch xử trí.',
+      'Thêm: hỏi cờ đỏ và ICE, khai thác tiền căn và lối sống, đề nghị cận lâm sàng, ' +
+      'vẽ được phả hệ, đặt được chẩn đoán chính và kế hoạch xử trí.',
     extends: 'Y2',
     mandatory: [
       'attachments.privacy',
@@ -80,6 +87,7 @@ export const LEVELS: Record<LearnerLevel, LevelDef> = {
       'dx.primary',
       'mx.nonPharm',
       'mx.followUpPlan',
+      'genogram.members',
     ],
     recommended: [
       'reflection.learned',
@@ -109,9 +117,10 @@ export const LEVELS: Record<LearnerLevel, LevelDef> = {
   Y6: {
     id: 'Y6',
     label: 'Y6 — Thực hành tổng hợp',
-    description: 'Thêm đánh giá nguy cơ, chẩn đoán phân biệt, dự phòng và theo dõi.',
+    description: 'Thêm đánh giá nguy cơ, chẩn đoán phân biệt có biện luận, và dự phòng.',
     expects:
-      'Thêm: rà soát yếu tố nguy cơ và tầm soát, chẩn đoán phân biệt có biện luận, kế hoạch dự phòng, chuyển tuyến và theo dõi.',
+      'Thêm: rà soát yếu tố nguy cơ và tầm soát, chẩn đoán phân biệt có biện luận, ' +
+      'kế hoạch dự phòng và tư vấn.',
     extends: 'Y5',
     mandatory: [
       'attachments.privacy',
@@ -144,24 +153,33 @@ export const LEVELS: Record<LearnerLevel, LevelDef> = {
       'meds.complete',
       'fm.familyType',
     ],
-    optional: [
-      'fm.apgar',
-      'fm.lifeCycle',
-      'genogram.members',
-      'followUp.entries',
-      'attachments.any',
-      'mx.goals',
-    ],
+    // fm.apgar, fm.screem and genogram.members are inherited as mandatory from
+    // Y2 and Y5; a level can only tighten what it inherits, never loosen it, so
+    // they are not repeated here.
+    optional: ['fm.lifeCycle', 'followUp.entries', 'attachments.any', 'mx.goals'],
   },
 
   SDH: {
     id: 'SDH',
     label: 'SDH — Sau đại học',
-    description: 'Bệnh án YHGĐ chuyên sâu: chu kỳ gia đình, APGAR, SCREEM, phả hệ, chăm sóc liên tục.',
+    description: 'Quản lý ca theo thời gian: mục tiêu điều trị, tái khám, đáp ứng, chăm sóc liên tục.',
     expects:
-      'Thêm: đánh giá gia đình đầy đủ — kiểu gia đình, chu kỳ sống, APGAR, SCREEM, phả hệ — và chăm sóc liên tục.',
+      'Thêm: quản lý ca theo thời gian — đặt mục tiêu điều trị, hẹn và ghi lần tái khám, ' +
+      'đánh giá đáp ứng điều trị và mức kiểm soát bệnh đồng mắc, chăm sóc liên tục.',
     extends: 'Y6',
     mandatory: [
+      // Managing the case over time is what separates this level from Y6:
+      // a goal, a review date, what happened at it, and whether the chronic
+      // problems are actually under control.
+      'mx.goals',
+      'mx.referral',
+      'meds.complete',
+      'followUp.entries',
+      'followUp.response',
+      'dx.comorbidityControl',
+      'fm.continuity',
+      'fm.familyType',
+      'fm.lifeCycle',
       'inv.impact',
       'reflection.nextTime',
       'risk.psychosocial',
@@ -169,26 +187,12 @@ export const LEVELS: Record<LearnerLevel, LevelDef> = {
       'risk.fallsGraded',
       'risk.cognitiveScreen',
       'risk.cvd',
-      'dx.comorbidityControl',
-      'fm.familyType',
-      'fm.lifeCycle',
-      'fm.apgar',
-      'fm.screem',
-      'genogram.members',
-      'fm.continuity',
-      'followUp.entries',
       'prev.screenings',
       'prev.vaccinations',
       'risk.overall',
       'dx.reasoning',
     ],
-    recommended: [
-      'fm.homeEnvironment',
-      'history.systemsReview',
-      'followUp.response',
-      'mx.goals',
-      'meds.complete',
-    ],
+    recommended: ['fm.homeEnvironment', 'history.systemsReview'],
     optional: ['patient.beliefs', 'attachments.any', 'risk.environmental'],
   },
 }

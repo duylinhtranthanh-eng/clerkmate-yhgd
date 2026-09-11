@@ -112,11 +112,46 @@ t('AI schema leaks no patient data', () => {
 // ------------------------------------------------------------- levels
 console.log('\nlearner levels')
 const EXPECTED = {
-  Y2: { total: 15, mandatory: 6, recommended: 5, optional: 4 },
-  Y5: { total: 38, mandatory: 19, recommended: 14, optional: 5 },
-  Y6: { total: 59, mandatory: 31, recommended: 21, optional: 7 },
-  SDH: { total: 66, mandatory: 50, recommended: 13, optional: 3 },
+  Y2: { total: 17, mandatory: 8, recommended: 5, optional: 4 },
+  Y5: { total: 41, mandatory: 22, recommended: 14, optional: 5 },
+  Y6: { total: 60, mandatory: 34, recommended: 21, optional: 5 },
+  SDH: { total: 66, mandatory: 54, recommended: 9, optional: 3 },
 }
+// Where each instrument is first required. The department teaches family
+// assessment from the second year and the genogram from the fifth, and the
+// postgraduate level is about managing a case over time rather than writing it
+// up once — these are the assignments the level map exists to express.
+t('Family APGAR and SCREEM are required from Y2', () => {
+  for (const l of M.LEVEL_ORDER) {
+    const map = M.resolveLevelRequirements(l)
+    eq(map.get('fm.apgar'), 'mandatory', `fm.apgar at ${l}`)
+    eq(map.get('fm.screem'), 'mandatory', `fm.screem at ${l}`)
+  }
+})
+t('the genogram is required from Y5, and not before', () => {
+  ok(M.resolveLevelRequirements('Y2').get('genogram.members') !== 'mandatory', 'required at Y2')
+  for (const l of ['Y5', 'Y6', 'SDH'])
+    eq(M.resolveLevelRequirements(l).get('genogram.members'), 'mandatory', `at ${l}`)
+})
+t('managing the case over time is what SDH adds', () => {
+  const sdh = M.resolveLevelRequirements('SDH')
+  const y6 = M.resolveLevelRequirements('Y6')
+  for (const id of ['mx.goals', 'meds.complete', 'followUp.entries', 'followUp.response',
+                    'dx.comorbidityControl', 'fm.continuity', 'mx.referral']) {
+    eq(sdh.get(id), 'mandatory', `${id} at SDH`)
+    ok(y6.get(id) !== 'mandatory', `${id} was already mandatory at Y6`)
+  }
+})
+t('a level can tighten what it inherits but never loosen it', () => {
+  const rank = { optional: 1, recommended: 2, mandatory: 3 }
+  for (let i = 1; i < M.LEVEL_ORDER.length; i++) {
+    const lower = M.resolveLevelRequirements(M.LEVEL_ORDER[i - 1])
+    const upper = M.resolveLevelRequirements(M.LEVEL_ORDER[i])
+    for (const [id, tier] of lower)
+      ok(rank[upper.get(id)] >= rank[tier], `${id} dropped from ${tier} at ${M.LEVEL_ORDER[i]}`)
+  }
+})
+
 for (const level of M.LEVEL_ORDER) {
   t(`${level}: tier map matches the documented counts`, () => {
     const r = M.resolveLevelRequirements(level)
