@@ -9,6 +9,7 @@
 import type { CaseRecord } from '../types/case'
 import type { SectionId } from './sections'
 import { applicableRiskFactors, riskContext } from './risk'
+import { isSubmissionSafe } from '../workflow/privacy'
 
 /** Ids of the factors that actually apply to this patient, for a domain. */
 function domainFactors(c: CaseRecord, domain: string) {
@@ -26,6 +27,16 @@ export interface RequirementDef {
   isSatisfied: (c: CaseRecord) => boolean
   /** Optional gate: item is excluded from scoring when this returns false. */
   appliesTo?: (c: CaseRecord) => boolean
+  /**
+   * Must be captured while the patient is still there.
+   *
+   * These are the items that cannot be reconstructed in the evening: what the
+   * patient said and feared, what the blood pressure was, what the knee looked
+   * like. Everything else — a genogram, a screening plan, a cardiovascular
+   * chart — can be finished afterwards from the notes. Marking them changes no
+   * arithmetic; it tells the learner what not to leave the room without.
+   */
+  bedside?: true
 }
 
 const t = (s: string | null | undefined): boolean => !!s && s.trim().length > 0
@@ -36,6 +47,7 @@ export const REQUIREMENTS: RequirementDef[] = [
   // --- Hành chính ---------------------------------------------------------
   {
     id: 'patient.identity',
+    bedside: true,
     label: 'Tuổi, giới tính, tên/mã ca',
     sectionId: 'patient',
     hint: 'Nhập tuổi và giới tính của bệnh nhân giả định.',
@@ -67,6 +79,7 @@ export const REQUIREMENTS: RequirementDef[] = [
   // --- Bệnh sử ------------------------------------------------------------
   {
     id: 'history.chiefComplaint',
+    bedside: true,
     label: 'Lý do chính (chief complaint)',
     sectionId: 'history',
     hint: 'Ghi bằng ngôn ngữ của bệnh nhân, kèm thời gian diễn tiến.',
@@ -74,6 +87,7 @@ export const REQUIREMENTS: RequirementDef[] = [
   },
   {
     id: 'history.hpi',
+    bedside: true,
     label: 'Diễn tiến bệnh sử',
     sectionId: 'history',
     hint: 'Kể lại diễn tiến theo trình tự thời gian.',
@@ -102,6 +116,7 @@ export const REQUIREMENTS: RequirementDef[] = [
   },
   {
     id: 'history.redFlags',
+    bedside: true,
     label: 'Cờ đỏ (red flags)',
     sectionId: 'history',
     hint: 'Hỏi và ghi rõ cờ đỏ nào có, cờ đỏ nào đã loại trừ.',
@@ -111,6 +126,7 @@ export const REQUIREMENTS: RequirementDef[] = [
   },
   {
     id: 'history.ice',
+    bedside: true,
     label: 'ICE — Ideas, Concerns, Expectations',
     sectionId: 'history',
     hint: 'Bệnh nhân nghĩ bệnh gì, lo điều gì, mong đợi gì ở lần khám này?',
@@ -127,6 +143,7 @@ export const REQUIREMENTS: RequirementDef[] = [
   // --- Tiền căn -----------------------------------------------------------
   {
     id: 'past.medical',
+    bedside: true,
     label: 'Tiền căn bệnh lý',
     sectionId: 'personalHistory',
     hint: 'Liệt kê bệnh nền, hoặc ghi rõ "chưa ghi nhận".',
@@ -239,6 +256,7 @@ export const REQUIREMENTS: RequirementDef[] = [
   // --- Khám ---------------------------------------------------------------
   {
     id: 'exam.vitals',
+    bedside: true,
     label: 'Sinh hiệu',
     sectionId: 'examination',
     hint: 'Tối thiểu mạch, huyết áp và một chỉ số khác.',
@@ -257,6 +275,7 @@ export const REQUIREMENTS: RequirementDef[] = [
   },
   {
     id: 'exam.general',
+    bedside: true,
     label: 'Khám tổng trạng',
     sectionId: 'examination',
     hint: 'Tri giác, da niêm, phù, dáng đi...',
@@ -271,6 +290,7 @@ export const REQUIREMENTS: RequirementDef[] = [
   },
   {
     id: 'exam.systemsRelevant',
+    bedside: true,
     label: 'Khám ít nhất 3 cơ quan',
     sectionId: 'examination',
     hint: 'Ca YHGĐ cần khám rộng hơn một cơ quan đơn lẻ.',
@@ -323,7 +343,7 @@ export const REQUIREMENTS: RequirementDef[] = [
     sectionId: 'attachments',
     hint: 'Mọi ảnh đính kèm phải được che tên, mã số, ngày sinh bệnh nhân trước khi nộp.',
     appliesTo: (c) => c.attachments.length > 0,
-    isSatisfied: (c) => c.attachments.every((a) => a.privacyChecked),
+    isSatisfied: (c) => c.attachments.every(isSubmissionSafe),
   },
   {
     id: 'attachments.any',
@@ -457,6 +477,7 @@ export const REQUIREMENTS: RequirementDef[] = [
   // --- Chẩn đoán ----------------------------------------------------------
   {
     id: 'dx.primary',
+    bedside: true,
     label: 'Chẩn đoán chính',
     sectionId: 'diagnosis',
     hint: 'Ghi chẩn đoán chính bằng thuật ngữ lâm sàng.',

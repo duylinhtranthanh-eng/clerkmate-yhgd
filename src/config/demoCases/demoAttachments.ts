@@ -140,6 +140,7 @@ async function build(
 ): Promise<DemoAttachment> {
   const blob = await canvasToBlob(canvas)
   const thumbnail = await makeThumbnail(blob)
+  const blobKey = uid('blob')
   return {
     blob,
     attachment: {
@@ -150,9 +151,15 @@ async function build(
       note: meta.note,
       mimeType: 'image/jpeg',
       thumbnail,
-      blobKey: uid('blob'),
+      blobKey,
+      // The already-redacted demo slip has been through the same canvas
+      // re-encode a real redaction produces, so it is submission-safe and
+      // points at the one artifact that exists. The un-redacted one has no
+      // safe derivative yet — which is the state the demo is there to teach.
+      sanitizedBlobKey: meta.redacted ? blobKey : '',
       redacted: meta.redacted,
       privacyChecked: meta.redacted,
+      faceCheck: '',
       createdAt: new Date().toISOString(),
     },
   }

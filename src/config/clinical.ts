@@ -291,7 +291,26 @@ export const ATTACHMENT_CATEGORIES: { id: AttachmentCategory; label: string; ico
   { id: 'ecg', label: 'Điện tâm đồ', icon: '💓' },
   { id: 'imaging', label: 'Chẩn đoán hình ảnh', icon: '🩻' },
   { id: 'prescription', label: 'Toa thuốc cũ', icon: '📄' },
+  { id: 'clinical_photo', label: 'Ảnh lâm sàng', icon: '📷' },
   { id: 'other', label: 'Khác', icon: '📁' },
+]
+
+/**
+ * Shown before the camera opens for a clinical photo, not after.
+ *
+ * A photograph of a lesion is a different privacy problem from a photograph of
+ * a lab slip: the identifying feature can be the patient themselves, and no
+ * amount of painting over it afterwards undoes having taken it.
+ */
+export const CLINICAL_PHOTO_WARNING =
+  'Không chụp mặt hoặc đặc điểm nhận diện người bệnh. ' +
+  'Chỉ chụp vùng tổn thương cần thiết cho mục đích học tập.'
+
+/** Minimum questions a clinical photo has to answer before it may be used. */
+export const CLINICAL_PHOTO_CHECKS: { key: 'noFace' | 'noIdText' | 'cropped'; label: string }[] = [
+  { key: 'noFace', label: 'Không có khuôn mặt người bệnh' },
+  { key: 'noIdText', label: 'Không có tên, mã hồ sơ, vòng tay định danh' },
+  { key: 'cropped', label: 'Đã cắt chỉ còn vùng cần thiết' },
 ]
 
 export const MEDICATION_ROUTES = ['Uống', 'Tiêm bắp', 'Tiêm tĩnh mạch', 'Bôi ngoài da', 'Hít', 'Nhỏ mắt', 'Đặt']

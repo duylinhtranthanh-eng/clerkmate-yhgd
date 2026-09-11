@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { CaseRecord, CompletenessSnapshot, LearnerLevel, RequirementTier } from '../types/case'
-import { evaluateCompleteness, missingByTier } from '../completeness/engine'
+import { bedsideMinimum, evaluateCompleteness, missingByTier } from '../completeness/engine'
 import { LEVELS, LEVEL_ORDER } from '../config/levels'
 import { SECTION_BY_ID } from '../config/sections'
 import type { SectionId } from '../config/sections'
@@ -39,6 +39,9 @@ export function CompletenessScreen({
     ? evaluateCompleteness(record, preview)
     : completeness
 
+  const bedside = bedsideMinimum(shown)
+
+
   const go = (sectionId: SectionId) =>
     sectionId === 'genogram'
       ? navigate({ name: 'case', caseId: record.id, tab: 'genogram' })
@@ -68,6 +71,40 @@ export function CompletenessScreen({
           </div>
         </div>
       </Card>
+
+      {/*
+        Placed above everything else because it is the only part with a deadline
+        attached: the rest of the record can be finished from notes tonight, and
+        this part cannot be finished at all once the patient has gone home.
+      */}
+      {bedside.total > 0 && (
+        <Card
+          title={`Tối thiểu tại phòng khám (${bedside.satisfied}/${bedside.total})`}
+          hint="Những mục chỉ lấy được khi bệnh nhân còn ngồi trước mặt. Phần còn lại hoàn thiện sau."
+          className="card--flat"
+        >
+          {bedside.missing.length === 0 ? (
+            <Notice tone="ok">Đã ghi đủ phần phải lấy tại chỗ.</Notice>
+          ) : (
+            <div className="stack stack--tight">
+              {bedside.missing.map((i) => (
+                <button
+                  key={i.id}
+                  type="button"
+                  className="list__item"
+                  onClick={() => go(i.sectionId as SectionId)}
+                >
+                  <div>
+                    <div className="list__title">{i.label}</div>
+                    <div className="list__sub">{SECTION_BY_ID[i.sectionId as SectionId]?.label}</div>
+                  </div>
+                  <span aria-hidden="true">›</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </Card>
+      )}
 
       <Card
         title="Xem thử mức khác"

@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import type { LearnerLevel } from '../types/case'
 import { createProfile } from '../types/profile'
-import { LEVELS, LEVEL_ORDER } from '../config/levels'
+import { LEVELS, LEVEL_ORDER, resolveLevelRequirements } from '../config/levels'
+import { RISK_MODE_BY_LEVEL } from '../config/risk'
 import { Card, Chip, Field, Notice, TextInput } from '../components/Ui'
 import { useProfile } from '../hooks/useProfile'
 
@@ -19,6 +20,27 @@ export function OnboardingScreen() {
   const [busy, setBusy] = useState(false)
 
   const ready = fullName.trim().length > 0 && studentId.trim().length > 0
+
+  /**
+   * What each level will actually ask for, shown while the learner is choosing.
+   *
+   * This is the one moment the choice matters and the one moment nobody has the
+   * information to make it: "Y5" means nothing until you can see that Y5 is
+   * asked for roughly three times what Y2 is. Counted from the level map, so
+   * it is a ceiling — items that only apply to some patients (sản phụ khoa, the
+   * geriatric scales) drop out of a real record.
+   */
+  const levelTable = LEVEL_ORDER.map((l) => {
+    let mandatory = 0
+    for (const tier of resolveLevelRequirements(l).values()) if (tier === 'mandatory') mandatory += 1
+    return { level: l, mandatory, riskMode: RISK_MODE_BY_LEVEL[l] }
+  })
+
+  const RISK_MODE_LABEL: Record<string, string> = {
+    checklist: 'chọn từ danh mục',
+    recallThenChecklist: 'tự nhớ trước, rồi mới xem danh mục',
+    generate: 'tự liệt kê, không có danh mục',
+  }
 
   const submit = async () => {
     if (!ready) return
@@ -92,6 +114,29 @@ export function OnboardingScreen() {
           </div>
         </Field>
         <p className="small muted" style={{ marginTop: -4 }}>{LEVELS[level].description}</p>
+
+        <div className="level-table" style={{ marginBottom: 'var(--sp-4)' }}>
+          {levelTable.map((row) => (
+            <div key={row.level} className="level-table__row" data-current={row.level === level ? 'true' : 'false'}>
+              <div className="level-table__level">
+                {row.level}
+                {row.level === level && <span className="level-table__you">bạn chọn</span>}
+              </div>
+              <div>
+                <div>
+                  <span className="level-table__pct mono">{row.mandatory}</span> mục bắt buộc
+                </div>
+                <div className="level-table__detail small">
+                  Yếu tố nguy cơ: {RISK_MODE_LABEL[row.riskMode]}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <p className="tiny muted" style={{ margin: '-6px 0 4px' }}>
+          Mức càng cao thì bệnh án càng bị đòi hỏi nhiều hơn, và phần yếu tố nguy cơ càng ít được gợi ý sẵn.
+          Đổi lại được bất cứ lúc nào trong Cài đặt.
+        </p>
 
         <Field label="Lớp / nhóm">
           <TextInput

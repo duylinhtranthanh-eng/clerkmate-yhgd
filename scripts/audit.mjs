@@ -27,7 +27,7 @@ writeFileSync(
   `
 export { REQUIREMENTS, REQUIREMENT_BY_ID } from '${process.cwd()}/src/config/requirements'
 export { LEVELS, LEVEL_ORDER, TIER_WEIGHTS, resolveLevelRequirements } from '${process.cwd()}/src/config/levels'
-export { evaluateCompleteness, missingByTier, sectionProgress } from '${process.cwd()}/src/completeness/engine'
+export { evaluateCompleteness, missingByTier, sectionProgress, bedsideMinimum } from '${process.cwd()}/src/completeness/engine'
 export { createEmptyCase, migrateCase } from '${process.cwd()}/src/types/factory'
 export { caseStatus, submitBlockers, STATUS, latestReview } from '${process.cwd()}/src/workflow/status'
 export { submit, reopen, recordReview, unreadReviews, acknowledgeReviews, mergeReview, buildBundle, parseBundle, makeSubmissionCode } from '${process.cwd()}/src/workflow/submission'
@@ -38,6 +38,7 @@ export { applyMany, canApply } from '${process.cwd()}/src/parsing/apply'
 export { buildKneeOsteoarthritisCase } from '${process.cwd()}/src/config/demoCases/kneeOsteoarthritis'
 export { buildElderlyMultimorbidCase } from '${process.cwd()}/src/config/demoCases/elderlyMultimorbid'
 export { RISK_DOMAINS, RISK_FACTOR_DEFS, riskModeFor } from '${process.cwd()}/src/config/risk'
+export { hasDerivative, isSubmissionSafe, faceDeclaredPresent, faceUnanswered, withExportSafeAttachments } from '${process.cwd()}/src/workflow/privacy'
 export { fallsBand } from '${process.cwd()}/src/config/falls'
 export { SCALES } from '${process.cwd()}/src/config/scales'
 export { computeBmi, bmiCategory } from '${process.cwd()}/src/utils/format'
@@ -184,7 +185,8 @@ t('the attachment privacy requirement applies only when an attachment exists', (
   ok(!withNone, 'applied with no attachments')
   const withOne = structuredClone(rec)
   withOne.attachments.push({ id: 'a', category: 'lab', title: 't', date: '', note: '', mimeType: 'image/jpeg',
-    thumbnail: '', blobKey: 'b', redacted: false, privacyChecked: false, createdAt: new Date().toISOString() })
+    thumbnail: '', blobKey: 'b', sanitizedBlobKey: '', redacted: false, privacyChecked: false,
+    faceCheck: '', createdAt: new Date().toISOString() })
   ok(M.evaluateCompleteness(withOne, 'SDH').items.some((i) => i.id === 'attachments.privacy'),
     'not applied with one attachment')
 })
@@ -193,7 +195,8 @@ t('a non-applicable requirement leaves the denominator, it is not a failure', ()
   const a = M.evaluateCompleteness(rec, 'SDH')
   const withAtt = structuredClone(rec)
   withAtt.attachments.push({ id: 'a', category: 'lab', title: 't', date: '', note: '', mimeType: 'image/jpeg',
-    thumbnail: '', blobKey: 'b', redacted: false, privacyChecked: false, createdAt: new Date().toISOString() })
+    thumbnail: '', blobKey: 'b', sanitizedBlobKey: '', redacted: false, privacyChecked: false,
+    faceCheck: '', createdAt: new Date().toISOString() })
   const b = M.evaluateCompleteness(withAtt, 'SDH')
   eq(b.mandatoryTotal, a.mandatoryTotal + 1, 'mandatory denominator did not grow by exactly one')
 })
@@ -230,6 +233,91 @@ t('both demo cases are near-complete at their own level', () => {
   }
 })
 
+// -------------------------------------------------------- bedside minimum
+console.log('\nbedside minimum — what cannot be finished tonight')
+t('the bedside minimum is a real subset, not the whole record', () => {
+  const rec = M.createEmptyCase('SDH', 'x')
+  const b = M.bedsideMinimum(M.evaluateCompleteness(rec))
+  ok(b.total >= 8 && b.total <= 12, `bedside total was ${b.total}`)
+  ok(b.total < M.evaluateCompleteness(rec).items.length / 2, 'the "minimum" is most of the record')
+})
+t('nothing is satisfied on a blank case, everything on a filled one', () => {
+  const blank = M.bedsideMinimum(M.evaluateCompleteness(M.createEmptyCase('SDH', 'x')))
+  eq(blank.satisfied, 0, 'a blank case already satisfied bedside items')
+  eq(blank.missing.length, blank.total)
+  const demo = M.buildKneeOsteoarthritisCase()
+  const b = M.bedsideMinimum(M.evaluateCompleteness(demo))
+  eq(b.satisfied, b.total, `demo case missing: ${b.missing.map((i) => i.id).join(', ')}`)
+})
+t('it follows the level rather than the catalogue', () => {
+  const rec = M.buildKneeOsteoarthritisCase()
+  const y2 = M.bedsideMinimum(M.evaluateCompleteness(rec, 'Y2')).total
+  const sdh = M.bedsideMinimum(M.evaluateCompleteness(rec, 'SDH')).total
+  ok(y2 <= sdh, `Y2 asked for ${y2}, SDH for ${sdh}`)
+})
+t('marking an item bedside changes no arithmetic', () => {
+  const rec = M.buildKneeOsteoarthritisCase()
+  const snap = M.evaluateCompleteness(rec)
+  const bedside = snap.items.filter((i) => i.bedside)
+  ok(bedside.length > 0, 'no item is marked bedside')
+  ok(bedside.every((i) => ['mandatory', 'recommended', 'optional'].includes(i.tier)),
+    'a bedside item landed outside the three tiers')
+  eq(snap.mandatoryTotal + snap.recommendedTotal + snap.optionalTotal, snap.items.length,
+    'the tier totals stopped adding up to the item count')
+})
+
+// ------------------------------------------------------------ privacy boundary
+console.log('\nprivacy boundary — what may leave the device')
+const att = (over = {}) => ({
+  id: 'a', category: 'lab', title: 't', date: '', note: '', mimeType: 'image/jpeg',
+  thumbnail: 'data:image/jpeg;base64,AAAA', blobKey: 'raw', sanitizedBlobKey: '',
+  redacted: false, privacyChecked: false, faceCheck: '', createdAt: new Date().toISOString(),
+  ...over,
+})
+t('an image with no derivative may not leave the device', () => {
+  ok(!M.hasDerivative(att()), 'a raw-only image counted as having a derivative')
+  ok(!M.isSubmissionSafe(att()), 'a raw-only image counted as submission-safe')
+})
+t('the old privacyChecked flag alone no longer opens the gate', () => {
+  ok(!M.isSubmissionSafe(att({ privacyChecked: true })), 'the flag alone was enough')
+  ok(M.isSubmissionSafe(att({ privacyChecked: true, sanitizedBlobKey: 'clean' })), 'a real derivative was refused')
+})
+t('a field missing entirely fails closed rather than throwing', () => {
+  const legacy = att()
+  delete legacy.sanitizedBlobKey
+  ok(!M.hasDerivative(legacy), 'a legacy attachment passed the derivative test')
+  ok(!M.isSubmissionSafe(legacy), 'a legacy attachment was submission-safe')
+})
+t('a declared face is blocked even when a derivative exists', () => {
+  const faced = att({ category: 'clinical_photo', sanitizedBlobKey: 'clean', redacted: true, faceCheck: 'present' })
+  ok(M.hasDerivative(faced), 'fixture is wrong: no derivative')
+  ok(M.faceDeclaredPresent(faced), 'the face was not detected')
+  ok(!M.isSubmissionSafe(faced), 'a face got through because the image was redacted')
+})
+t('an unanswered face question blocks a clinical photo, but not a lab image', () => {
+  ok(!M.isSubmissionSafe(att({ category: 'clinical_photo', sanitizedBlobKey: 'clean' })), 'unanswered photo passed')
+  ok(M.faceUnanswered(att({ category: 'clinical_photo' })), 'unanswered photo not reported')
+  ok(M.isSubmissionSafe(att({ category: 'lab', sanitizedBlobKey: 'clean' })), 'a lab image was asked the face question')
+})
+t('an export strips the image data of anything unsafe, and keeps the entry', () => {
+  const rec = M.createEmptyCase('Y5', 'x')
+  rec.attachments.push(att({ id: 'unsafe' }), att({ id: 'safe', sanitizedBlobKey: 'clean', privacyChecked: true }))
+  const out = M.withExportSafeAttachments(rec)
+  eq(out.attachments.length, 2, 'an entry disappeared instead of being stripped')
+  const unsafe = out.attachments.find((a) => a.id === 'unsafe')
+  eq(unsafe.thumbnail, '', 'a raw-derived thumbnail survived into the export')
+  eq(unsafe.blobKey, '', 'a raw blob key survived into the export')
+  eq(out.attachments.find((a) => a.id === 'safe').thumbnail, 'data:image/jpeg;base64,AAAA', 'a safe image was stripped')
+  eq(rec.attachments[0].thumbnail, 'data:image/jpeg;base64,AAAA', 'the local record was mutated by an export')
+})
+t('the submission bundle is built from the stripped record', () => {
+  const rec = M.createEmptyCase('Y5', 'x')
+  rec.attachments.push(att({ id: 'unsafe' }))
+  const bundle = M.buildBundle(rec, { fullName: 'a', studentId: 'b', level: 'Y5', classGroup: '' })
+  eq(bundle.record.attachments[0].thumbnail, '', 'the bundle carried a raw-derived thumbnail')
+  ok(!JSON.stringify(bundle).includes('base64,AAAA'), 'raw image bytes reached the bundle JSON')
+})
+
 // -------------------------------------------------------------- status machine
 console.log('\nstatus machine and submission gate')
 const snapOf = (r) => M.evaluateCompleteness(r)
@@ -242,7 +330,8 @@ t('a blank case is "new", a noted case is "noting"', () => {
 t('a complete case with a dirty attachment is not "ready to submit"', () => {
   const rec = M.buildKneeOsteoarthritisCase()
   rec.attachments.push({ id: 'a', category: 'lab', title: 't', date: '', note: '', mimeType: 'image/jpeg',
-    thumbnail: '', blobKey: 'b', redacted: false, privacyChecked: false, createdAt: new Date().toISOString() })
+    thumbnail: '', blobKey: 'b', sanitizedBlobKey: '', redacted: false, privacyChecked: false,
+    faceCheck: '', createdAt: new Date().toISOString() })
   const st = M.caseStatus(rec, snapOf(rec))
   ok(st !== 'readyToSubmit', `status was ${st}`)
   ok(M.submitBlockers(rec, snapOf(rec)).some((b) => /ảnh/.test(b)), 'no image blocker raised')
@@ -250,7 +339,8 @@ t('a complete case with a dirty attachment is not "ready to submit"', () => {
 t('the submission gate covers mandatory items AND image privacy', () => {
   const rec = M.createEmptyCase('SDH', 'x')
   rec.attachments.push({ id: 'a', category: 'lab', title: 't', date: '', note: '', mimeType: 'image/jpeg',
-    thumbnail: '', blobKey: 'b', redacted: false, privacyChecked: false, createdAt: new Date().toISOString() })
+    thumbnail: '', blobKey: 'b', sanitizedBlobKey: '', redacted: false, privacyChecked: false,
+    faceCheck: '', createdAt: new Date().toISOString() })
   const blockers = M.submitBlockers(rec, snapOf(rec))
   ok(blockers.some((b) => /bắt buộc/.test(b)), 'no mandatory blocker')
   ok(blockers.some((b) => /ảnh/.test(b)), 'no privacy blocker')
@@ -447,7 +537,7 @@ t('risk scaffolding fades by level, with the emergency exception', () => {
   const emergency = M.RISK_DOMAINS.find((d) => d.id === 'emergency')
   const cardio = M.RISK_DOMAINS.find((d) => d.id === 'cardiometabolic')
   for (const l of M.LEVEL_ORDER) eq(M.riskModeFor(l, emergency), 'checklist', `emergency at ${l}`)
-  eq(M.riskModeFor('Y2', cardio), 'checklist')
+  eq(M.riskModeFor('Y2', cardio), 'recallThenChecklist')
   eq(M.riskModeFor('Y5', cardio), 'recallThenChecklist')
   eq(M.riskModeFor('SDH', cardio), 'generate')
 })

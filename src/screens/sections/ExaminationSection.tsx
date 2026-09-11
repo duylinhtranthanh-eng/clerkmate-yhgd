@@ -99,6 +99,15 @@ export function ExaminationSection({ record, update }: SectionProps) {
           <Field label="Vòng eo (cm)">
             <TextInput inputMode="numeric" value={v.waistCm} onChange={(e) => setVital('waistCm', e.target.value)} placeholder="86" />
           </Field>
+          <Field label="Đường huyết" help="Đo tại chỗ, như ô trên bệnh án giấy.">
+            <TextInput
+              value={v.bloodGlucose}
+              onChange={(e) => setVital('bloodGlucose', e.target.value)}
+              placeholder="5,6 mmol/L"
+            />
+          </Field>
+        </div>
+        <div className="grid-2">
           <Field label="BMI" help="Ngưỡng châu Á (WHO Asia-Pacific)">
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 44 }}>
               {bmi ? (

@@ -15,6 +15,7 @@
 import type { CaseRecord, FacultyReview } from '../types/case'
 import { uid } from '../utils/id'
 import { stripDiacritics } from '../parsing/text'
+import { withExportSafeAttachments } from './privacy'
 
 /** Short, human-readable, and stable for one submission. */
 export function makeSubmissionCode(record: CaseRecord, studentId: string): string {
@@ -138,7 +139,7 @@ export function buildBundle(
     code: record.submission.code,
     student,
     exportedAt: new Date().toISOString(),
-    record,
+    record: withExportSafeAttachments(record),
   }
 }
 

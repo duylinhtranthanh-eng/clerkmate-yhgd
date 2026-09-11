@@ -41,16 +41,26 @@ About ten minutes, one device, no account. All data are fictional.
 
 10. **Export** (tab *Xem trước*) → *Xuất PDF* → Save as PDF. In the file: the numbered sections, the
     learner's identity, the vector genogram, the per-page level watermark and the level stamp.
+    **This is the end of the learner journey** — the PDF is what goes to the lecturer, over whatever
+    channel the class already uses. Nothing needs to be installed on the other side.
 
-11. **Submit.** On the *Nộp bài* card: with an un-redacted image the button is disabled and names
-    what is missing; once clean, *Nộp bài và khoá sửa* mints a submission code, locks the record and
-    downloads a `.json`. Try editing any field afterwards — the value snaps back with an explanation.
+    Worth checking before you print: an attachment that has not been through the privacy step is
+    *not* in the PDF, and the printed attachment list says the image was withheld and why.
 
-12. **Grade it.** Home → *Chấm bài (dành cho giảng viên)* → open the `.json` just downloaded. The
-    learner's identity, completeness and the read-only record are shown. Type a name and a comment →
-    *Trả lại để bổ sung* → a second file downloads. Then Home → *Mở tệp giảng viên gửi về* → choose
-    that file: the case is badged *Trả lại để bổ sung*, the comment appears verbatim, and the record
-    unlocks.
+The remaining two steps are optional extras, filed under *Công cụ nâng cao* on Home. They are not
+part of the flow the product is built around.
+
+11. **Lock the handed-in version** (optional). On the *Khoá bản đã nộp* card: with an image that has
+    no sanitized derivative the button is disabled and names what is missing; once clean,
+    *Nộp bài và khoá sửa* mints a code and locks the record. No file is downloaded. Try editing any
+    field afterwards — the value snaps back with an explanation.
+
+12. **The `.json` round-trip** (optional, advanced). *Tải lại tệp dữ liệu (.json)* writes the case
+    out. Home → *Chấm bài từ tệp .json (nâng cao)* → open it: the learner's identity, completeness
+    and the read-only record are shown. Type a name and a comment → *Trả lại để bổ sung* → a second
+    file is written. Then Home → *Mở tệp .json giảng viên gửi về* → choose that file: the case is
+    badged *Trả lại để bổ sung*, the comment appears verbatim, and the record unlocks. Useful for
+    moving a case between devices; not the submission route.
 
 13. **Offline** (optional). Install to the home screen, turn on airplane mode, reopen. The app
     starts and cases can still be created and edited.

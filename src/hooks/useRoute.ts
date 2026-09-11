@@ -7,7 +7,6 @@ export type CaseTab = (typeof CASE_TABS)[number]
 export type Route =
   | { name: 'home' }
   | { name: 'settings' }
-  | { name: 'review-inbox' }
   | { name: 'case'; caseId: string; tab: CaseTab }
   | { name: 'section'; caseId: string; sectionId: SectionId }
 
@@ -17,8 +16,6 @@ export function buildHash(route: Route): string {
       return '#/'
     case 'settings':
       return '#/settings'
-    case 'review-inbox':
-      return '#/cham-bai'
     case 'case':
       return `#/case/${route.caseId}/${route.tab}`
     case 'section':
@@ -29,7 +26,6 @@ export function buildHash(route: Route): string {
 export function parseHash(hash: string): Route {
   const parts = hash.replace(/^#\/?/, '').split('/').filter(Boolean)
   if (parts[0] === 'settings') return { name: 'settings' }
-  if (parts[0] === 'cham-bai') return { name: 'review-inbox' }
   if (parts[0] === 'case' && parts[1]) {
     if (parts[2] === 's' && parts[3]) {
       return { name: 'section', caseId: parts[1], sectionId: parts[3] as SectionId }

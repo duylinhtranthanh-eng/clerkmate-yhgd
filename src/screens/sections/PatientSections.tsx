@@ -37,6 +37,24 @@ export function PatientSection({ record, update }: SectionProps) {
           </div>
         </Field>
 
+        {/* Both numbers come from the department's paper form. */}
+        <div className="grid-2">
+          <Field label="Số hồ sơ">
+            <TextInput
+              value={p.fileNumber}
+              onChange={(e) => update((d) => void (d.patient.fileNumber = e.target.value))}
+              placeholder="Không bắt buộc"
+            />
+          </Field>
+          <Field label="MSGĐ" help="Mã số gia đình trên bệnh án giấy.">
+            <TextInput
+              value={p.familyCode}
+              onChange={(e) => update((d) => void (d.patient.familyCode = e.target.value))}
+              placeholder="Không bắt buộc"
+            />
+          </Field>
+        </div>
+
         <div className="grid-2">
           <Field label="Tuổi">
             <TextInput

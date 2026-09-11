@@ -547,12 +547,65 @@ p  { margin: 0 0 var(--sp-3); }
   border-bottom: 1px solid var(--line);
 }
 .doc h2:first-of-type { margin-top: var(--sp-4); }
+.doc h3 {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-800);
+  margin: var(--sp-4) 0 var(--sp-2);
+}
+.doc__sub:first-of-type > h3 { margin-top: var(--sp-2); }
+/* Signature block, right-aligned the way a Vietnamese chart is signed off. */
+.doc__subtitle {
+  margin: 2px 0 0;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.doc__sign {
+  margin-top: var(--sp-6);
+  display: flex;
+  justify-content: space-around;
+  gap: var(--sp-4);
+  text-align: center;
+}
+.doc__sign p { margin: 0 0 2px; }
+.doc__sign .doc__sign-name { margin-top: 46px; font-weight: 600; }
 .doc dl { margin: 0; display: grid; grid-template-columns: minmax(120px, 34%) 1fr; gap: 5px var(--sp-3); }
 .doc dt { color: var(--ink-500); font-size: 13px; }
 .doc dd { margin: 0; }
 .doc ul { margin: 4px 0; padding-left: 20px; }
 .doc .doc__meta { color: var(--ink-500); font-size: 12.5px; }
 .doc .doc__free { white-space: pre-wrap; }
+/* Attached images are evidence: shown whole, never cropped to a square. */
+.doc__figures { display: grid; gap: var(--sp-3); margin-top: var(--sp-3); }
+.doc__figures figure { margin: 0; }
+.doc__figures img {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: #fff;
+}
+.doc__figures figcaption { font-size: 12.5px; color: var(--ink-500); margin-top: 4px; }
+
+/* Four learner levels, read at a glance rather than one chip at a time. */
+.level-table { display: grid; gap: 6px; }
+.level-table__row {
+  display: grid;
+  grid-template-columns: 62px 1fr;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+.level-table__row[data-current='true'] { border-color: var(--brand-500); background: var(--info-bg); }
+.level-table__level { font-weight: 700; display: flex; flex-direction: column; }
+.level-table__you { font-size: 10px; font-weight: 600; color: var(--brand-700); }
+.level-table__pct { font-weight: 700; }
+.level-table__detail { color: var(--ink-500); }
 
 .hr { height: 1px; background: var(--line); border: 0; margin: var(--sp-4) 0; }
 

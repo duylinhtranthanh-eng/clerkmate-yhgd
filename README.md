@@ -1,6 +1,14 @@
 # ClerkMate
 
-Mobile-first clinical learning record for Family Medicine training.
+A mobile-first clinical learning record that helps undergraduate and postgraduate learners capture
+information during clinical encounters, turn notes into a structured Family Medicine record,
+self-check completeness at their own learner level, protect identifying information in attachments,
+and export a standardised PDF to hand to faculty.
+
+**The PDF is the handoff.** Faculty read it with the tools they already use — email, Zalo, an LMS,
+Drive — and need install nothing. ClerkMate delivers its value without requiring faculty adoption,
+and the core app runs with no backend at all: local-first is a deliberate design choice, not a
+missing feature.
 
 > **Educational tool, not a hospital EMR.** All demo data are simulated. The app does not diagnose
 > and does not recommend treatment.
@@ -22,7 +30,8 @@ is ambiguous — it can mean "asked, nothing there" or "never asked", and a teac
 ClerkMate closes the gap by making the note *become* the record:
 
 ```
-quick capture → structured record → completeness check by level → submission
+quick capture → structured record → completeness check by level
+  → privacy check on attachments → preview → PDF for faculty
 ```
 
 ## Core features
@@ -56,10 +65,19 @@ Only what is implemented and verified today.
 - **PDF export.** The on-screen preview *is* the printed document. Export goes through the browser's
   print pipeline, so Vietnamese diacritics and selectable text survive with no embedded font. Every
   page carries a watermark of the declared level and the learner's ID.
-- **Submission and reviewer workflow.** Eight processing states, five derived from the record's own
-  content. Submitting locks the record and mints a submission code; the exported file can be opened
-  by a faculty member in the same app to add a comment and return the work, which unlocks it and
-  shows the comment in-app. No server and no accounts — the record itself is what moves.
+- **Attachment privacy pipeline.** The picked file stays local and is never exported as-is. Only a
+  *derivative* may leave the device: the redacted image, or a canvas re-encode produced when the
+  learner declares there are no identifiers — both re-encodes, so EXIF and GPS cannot survive. An
+  attachment with no derivative is withheld from the PDF, and the printed list says so. Clinical
+  photos must answer whether a face is visible; a declared face blocks the image outright rather
+  than being blurred and passed.
+- **Processing states and an optional lock.** Eight states, five derived from the record's own
+  content. Locking a case is optional bookkeeping — it marks "this is the version I handed in" and
+  mints a code that prints on the PDF. It is not the handoff; the PDF is.
+- **Portable case file (advanced).** A case can be written out as `.json` for backup, for moving
+  between devices, and for technical audit. It is not the submission route and faculty are not
+  expected to import it — an advanced screen can open one and attach a comment, kept because it
+  works, not because the flow depends on it.
 - **Local-first, PWA, offline.** Records live in IndexedDB on the device. Installable to the home
   screen, and fully usable after the first load with no network.
 
@@ -76,8 +94,10 @@ Recommended path for a reviewer, about ten minutes:
 
 Home → seed a demo case → **Ghi nhanh** (insert the sample note, press *Sắp xếp vào bệnh án*) →
 **Bệnh án** → **Hoàn chỉnh** (then switch the preview between Y2 / Y5 / Y6 / SDH) → **Phả hệ** →
-**Hình ảnh đính kèm** (try the redaction tool) → **Xem trước** → *Xuất PDF* → *Nộp bài* →
-Home → *Chấm bài* → return the work with a comment.
+**Hình ảnh đính kèm** (try the redaction tool) → **Xem trước** → *Xuất PDF*.
+
+That is the whole learner journey, and it ends at the PDF. The optional lock and the `.json`
+round-trip sit under *Công cụ nâng cao* on Home if you want to see them.
 
 The step-by-step version is in [docs/DEMO.md](docs/DEMO.md).
 

@@ -35,6 +35,10 @@ export interface Patient {
   insurance: Text
   /** Learner-facing identifier for the fictional case, e.g. "Case 03". */
   caseLabel: Text
+  /** "Số hồ sơ" on the department's paper form. */
+  fileNumber: Text
+  /** "MSGĐ" — the family's own number on the paper form. */
+  familyCode: Text
 }
 
 export interface Visit {
@@ -230,6 +234,8 @@ export interface Vitals {
   waistCm: Text
   /** Derived, but stored so the export is reproducible. */
   bmi: Text
+  /** "Đường huyết" sits in the vitals row of the paper form. */
+  bloodGlucose: Text
 }
 
 /**
@@ -494,7 +500,17 @@ export type AttachmentCategory =
   | 'ecg'
   | 'imaging'
   | 'prescription'
+  | 'clinical_photo'
   | 'other'
+
+/**
+ * Whether a clinical photo shows the patient's face.
+ *
+ * A separate question from identifying *text*, and it has no redaction answer:
+ * a blurred face is still a face. The only safe outcomes are a crop that
+ * removes it or a retake, so `present` blocks the image from leaving the device.
+ */
+export type FaceCheck = '' | 'none' | 'present'
 
 export interface Attachment {
   id: string
@@ -505,8 +521,27 @@ export interface Attachment {
   mimeType: string
   /** Small data-URL preview kept inline so lists render without a blob read. */
   thumbnail: string
-  /** Key into the `attachments` object store holding the full-size Blob. */
+  /**
+   * Key into the `blobs` object store holding the working image.
+   *
+   * This is the local copy and may still be the untouched file the learner
+   * picked, metadata and all. Nothing that leaves the device may read it.
+   */
   blobKey: string
+  /**
+   * Key of the derivative that is allowed to leave the device.
+   *
+   * The boundary the rest of the app depends on:
+   *
+   *     raw local blob → sanitise / redact → submission-safe blob → PDF, export
+   *
+   * Produced by re-encoding through a canvas, which drops EXIF, GPS and every
+   * other embedded tag as a side effect of the pixels being redrawn. Empty
+   * until the learner has resolved the image's privacy state, and the print
+   * and submission paths treat empty as "not eligible" rather than falling
+   * back to `blobKey`.
+   */
+  sanitizedBlobKey: string
   /**
    * Identifiers have been painted out of the stored image.
    *
@@ -517,6 +552,8 @@ export interface Attachment {
   redacted: boolean
   /** Learner has confirmed the image carries no patient identifiers. */
   privacyChecked: boolean
+  /** Only meaningful for `clinical_photo`; `present` blocks submission. */
+  faceCheck: FaceCheck
   createdAt: string
 }
 
@@ -654,6 +691,8 @@ export interface CompletenessItemResult {
   tier: RequirementTier
   satisfied: boolean
   hint: string
+  /** Part of the minimum that has to be captured during the encounter. */
+  bedside: boolean
 }
 
 export interface CompletenessSnapshot {

@@ -46,6 +46,8 @@ export function createEmptyCase(level: LearnerLevel = 'Y5', caseLabel = ''): Cas
       phone: '',
       insurance: '',
       caseLabel,
+      fileNumber: '',
+      familyCode: '',
     },
     visit: {
       date: todayIso(),
@@ -135,6 +137,7 @@ export function createEmptyCase(level: LearnerLevel = 'Y5', caseLabel = ''): Cas
         weightKg: '',
         waistCm: '',
         bmi: '',
+        bloodGlucose: '',
       },
       systems: EXAM_SYSTEMS.map((s) => ({
         id: s.id,
@@ -250,6 +253,31 @@ export function createEmptyCase(level: LearnerLevel = 'Y5', caseLabel = ''): Cas
  * Fill in fields added by later schema versions so an old stored record still
  * satisfies the current type. Deliberately conservative: never overwrite data.
  */
+/**
+ * Brings an attachment written before the sanitised-derivative boundary existed
+ * up to the current rules.
+ *
+ * A redacted image already went through a canvas re-encode, so its bytes are a
+ * derivative and can be pointed at directly. An image the learner merely
+ * *declared* clean is still the original file, metadata and all — the hole this
+ * boundary exists to close. Rather than grandfather it, the declaration is
+ * cleared so the learner confirms once more, and that confirmation now produces
+ * a real derivative.
+ */
+function migrateAttachment(stored: CaseRecord['attachments'][number]): CaseRecord['attachments'][number] {
+  const a = stored as Partial<CaseRecord['attachments'][number]> & { blobKey: string }
+  if (typeof a.sanitizedBlobKey === 'string') {
+    return { ...(a as CaseRecord['attachments'][number]), faceCheck: a.faceCheck ?? '' }
+  }
+  const wasRedacted = a.redacted === true
+  return {
+    ...(a as CaseRecord['attachments'][number]),
+    sanitizedBlobKey: wasRedacted ? a.blobKey : '',
+    privacyChecked: wasRedacted,
+    faceCheck: '',
+  }
+}
+
 /**
  * Keep a stored record's answers while picking up factors added to the
  * catalogue since it was written. Answers win; labels and domains follow the
@@ -391,6 +419,7 @@ export function migrateCase(raw: unknown): CaseRecord {
         : base.familyMembers,
     reflection: { ...base.reflection, ...(stored.reflection ?? {}) },
     submission: { ...base.submission, ...(stored.submission ?? {}) },
+    attachments: (stored.attachments ?? []).map(migrateAttachment),
     schemaVersion: SCHEMA_VERSION,
   }
   return merged

@@ -87,9 +87,34 @@ export function HistorySection({ record, update }: SectionProps) {
 
       <Card
         title="Cờ đỏ (red flags)"
-        hint="Chạm 1 lần: đã ghi nhận có. Chạm ở hàng dưới: đã hỏi và loại trừ."
+        hint="Tự liệt kê những dấu hiệu bạn đã nghĩ tới. Danh sách gợi ý nằm bên dưới, xem sau khi đã tự nhớ."
       >
-        <div className="chips" style={{ marginBottom: 14 }}>
+        {/*
+          Typing first, tapping second. Recalling red flags is the thing being
+          learnt; picking them off a list is recognition, which is easier and
+          teaches less. The text box writes into the same array the chips do, so
+          nothing is lost either way.
+        */}
+        <Field label="Cờ đỏ bạn ghi nhận" help="Mỗi dòng một ý.">
+          <TextArea
+            rows={4}
+            value={h.redFlags.present.join('\n')}
+            onChange={(e) =>
+              update((d) => {
+                d.history.redFlags.present = e.target.value
+                  .split('\n')
+                  .map((x) => x.trim())
+                  .filter((x) => x.length > 0)
+              })
+            }
+            placeholder={'Sụt cân không chủ ý\nSốt kéo dài\nĐau về đêm làm mất ngủ'}
+          />
+        </Field>
+
+        <div className="section-title" style={{ marginTop: 14 }}>
+          Gợi ý — xem sau khi đã tự liệt kê
+        </div>
+        <div className="chips" style={{ margin: '8px 0 14px' }}>
           {RED_FLAG_LIBRARY.map((g) => (
             <Chip key={g.group} small on={flagGroup === g.group} onClick={() => setFlagGroup(g.group)}>
               {g.group}
@@ -97,7 +122,7 @@ export function HistorySection({ record, update }: SectionProps) {
           ))}
         </div>
 
-        <div className="section-title">Ghi nhận có</div>
+        <div className="section-title">Thêm nhanh vào danh sách trên</div>
         <div className="chips" style={{ margin: '8px 0 14px' }}>
           {activeGroup.items.map((f) => (
             <Chip

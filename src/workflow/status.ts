@@ -9,6 +9,12 @@
 
 import type { CaseRecord, CaseStatus, CompletenessSnapshot } from '../types/case'
 import { nonEmpty } from '../utils/format'
+import {
+  faceDeclaredPresent,
+  faceUnanswered,
+  hasDerivative,
+  isSubmissionSafe,
+} from './privacy'
 
 export interface StatusDef {
   id: CaseStatus
@@ -40,19 +46,19 @@ export const STATUS: Record<CaseStatus, StatusDef> = {
   complete: {
     id: 'complete',
     label: 'Hoàn chỉnh',
-    next: 'Còn ảnh chưa che thông tin định danh — xử lý trước khi nộp.',
+    next: 'Còn ảnh chưa qua kiểm tra riêng tư — xử lý trước, nếu không ảnh sẽ không được in vào PDF.',
     tone: 'warn',
   },
   readyToSubmit: {
     id: 'readyToSubmit',
     label: 'Sẵn sàng nộp',
-    next: 'Vào tab Xem trước để xuất PDF và nộp bài.',
+    next: 'Vào tab Xem trước để xuất PDF rồi gửi giảng viên.',
     tone: 'ok',
   },
   submitted: {
     id: 'submitted',
     label: 'Đã nộp',
-    next: 'Đang chờ giảng viên chấm. Ca đã khoá sửa.',
+    next: 'Ca đã khoá sửa. Gửi tệp PDF cho giảng viên nếu bạn chưa gửi.',
     tone: 'brand',
   },
   accepted: {
@@ -100,7 +106,7 @@ export function caseStatus(c: CaseRecord, completeness: CompletenessSnapshot): C
   if (nonEmpty(c.submission.submittedAt)) return 'submitted'
 
   const mandatoryMissing = completeness.mandatoryTotal - completeness.mandatorySatisfied
-  const imagesClean = c.attachments.every((a) => a.privacyChecked)
+  const imagesClean = c.attachments.every(isSubmissionSafe)
 
   if (mandatoryMissing === 0 && imagesClean) return 'readyToSubmit'
   if (mandatoryMissing === 0) return 'complete'
@@ -114,7 +120,11 @@ export function submitBlockers(c: CaseRecord, completeness: CompletenessSnapshot
   const out: string[] = []
   const missing = completeness.mandatoryTotal - completeness.mandatorySatisfied
   if (missing > 0) out.push(`Còn ${missing} mục bắt buộc chưa đạt`)
-  const dirty = c.attachments.filter((a) => !a.privacyChecked).length
-  if (dirty > 0) out.push(`Còn ${dirty} ảnh chưa che thông tin định danh`)
+  const unanswered = c.attachments.filter(faceUnanswered).length
+  if (unanswered > 0) out.push(`Còn ${unanswered} ảnh lâm sàng chưa trả lời câu hỏi khuôn mặt`)
+  const faces = c.attachments.filter(faceDeclaredPresent).length
+  if (faces > 0) out.push(`Còn ${faces} ảnh có khuôn mặt bệnh nhân — phải cắt bỏ hoặc xoá ảnh`)
+  const dirty = c.attachments.filter((a) => !hasDerivative(a) && !faceDeclaredPresent(a)).length
+  if (dirty > 0) out.push(`Còn ${dirty} ảnh chưa che hoặc chưa xác nhận thông tin định danh`)
   return out
 }

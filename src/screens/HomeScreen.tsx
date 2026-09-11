@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { CaseSummary, LearnerLevel } from '../types/case'
-import { deleteCase, getCase, listCases, saveCase } from '../db/repository'
-import { createEmptyCase, migrateCase } from '../types/factory'
+import { deleteCase, listCases, saveCase } from '../db/repository'
+import { createEmptyCase } from '../types/factory'
 import { STATUS } from '../workflow/status'
-import { mergeReview, parseBundle } from '../workflow/submission'
 import { LEVELS } from '../config/levels'
 import { SEX_LABEL, relativeTime } from '../utils/format'
 import { useProfile } from '../hooks/useProfile'
@@ -50,7 +49,7 @@ export function HomeScreen({ navigate }: { navigate: (r: Route) => void }) {
   const onSeedDemo = async (demo: DemoCaseDef) => {
     setSeeding(true)
     try {
-      await seedDemoCase(demo)
+      await seedDemoCase(demo, profile?.level)
       setPickingDemo(false)
       toast(`Đã tạo ${demo.label}.`)
       refresh()
@@ -59,27 +58,16 @@ export function HomeScreen({ navigate }: { navigate: (r: Route) => void }) {
     }
   }
 
-  /**
-   * Applies a file the teacher sent back.
-   *
-   * The reviewer only ever writes the submission block, so the learner's own
-   * copy stays authoritative for the clinical content. A learner who has
-   * changed device gets the whole record instead.
-   */
-  const onOpenReviewed = async (file: File) => {
+  /** One tap for someone who just wants to look around with real material. */
+  const onSeedAllDemos = async () => {
+    setSeeding(true)
     try {
-      const bundle = parseBundle(await file.text())
-      const incoming = migrateCase(bundle.record)
-      const local = await getCase(incoming.id)
-      await saveCase(local ? mergeReview(local, incoming) : incoming)
-      toast(
-        local
-          ? 'Đã cập nhật nhận xét của giảng viên vào ca này.'
-          : 'Ca chưa có trên thiết bị này — đã mở lại từ tệp.',
-      )
+      for (const demo of DEMO_CASES) await seedDemoCase(demo, profile?.level)
+      setPickingDemo(false)
+      toast(`Đã tạo ${DEMO_CASES.length} ca mẫu.`)
       refresh()
-    } catch (e) {
-      toast(e instanceof Error ? e.message : 'Không đọc được tệp.')
+    } finally {
+      setSeeding(false)
     }
   }
 
@@ -233,34 +221,6 @@ export function HomeScreen({ navigate }: { navigate: (r: Route) => void }) {
           </button>
         )}
 
-        <Card title="Nộp bài &amp; chấm bài" className="card--flat">
-          <p className="small muted" style={{ marginTop: -4 }}>
-            Bài nộp đi kèm một tệp <code>.json</code>. Giảng viên mở tệp đó trong mục Chấm bài, ghi nhận xét,
-            rồi gửi tệp kết quả về — không cần tài khoản hay máy chủ.
-          </p>
-          <div className="stack">
-            <label className="btn btn--secondary btn--block" style={{ cursor: 'pointer' }}>
-              📥 Mở tệp giảng viên gửi về
-              <input
-                type="file"
-                accept="application/json"
-                style={{ display: 'none' }}
-                onChange={(e) => {
-                  const f = e.target.files?.[0]
-                  if (f) void onOpenReviewed(f)
-                  e.target.value = ''
-                }}
-              />
-            </label>
-            <button
-              type="button"
-              className="btn btn--secondary btn--block"
-              onClick={() => navigate({ name: 'review-inbox' })}
-            >
-              🧑‍🏫 Chấm bài (dành cho giảng viên)
-            </button>
-          </div>
-        </Card>
 
         <Notice tone="info">
           Dữ liệu chỉ nằm trên thiết bị này. Nên sao lưu trong phần Cài đặt trước khi trình diễn.
@@ -270,8 +230,18 @@ export function HomeScreen({ navigate }: { navigate: (r: Route) => void }) {
       <Sheet open={pickingDemo} onClose={() => setPickingDemo(false)} title="Chọn ca mẫu">
         <p className="small muted" style={{ marginTop: -6 }}>
           Hai ca giả lập đã điền đầy đủ, kèm ảnh phiếu xét nghiệm mô phỏng để thử ngay công cụ che thông tin
-          định danh.
+          định danh. Ca được lập ở <strong>mức {profile?.level ?? 'Y5'}</strong> theo hồ sơ của bạn — đổi mức
+          trong Cài đặt thì mức độ đầy đủ yêu cầu cũng đổi theo.
         </p>
+        <button
+          type="button"
+          className="btn btn--primary btn--block"
+          style={{ marginBottom: 'var(--sp-3)' }}
+          disabled={seeding}
+          onClick={() => void onSeedAllDemos()}
+        >
+          ▶ Tạo cả {DEMO_CASES.length} ca mẫu
+        </button>
         {seeding && <p className="small muted">Đang tạo ca và ảnh đính kèm…</p>}
         <div className="stack">
           {DEMO_CASES.map((demo) => (

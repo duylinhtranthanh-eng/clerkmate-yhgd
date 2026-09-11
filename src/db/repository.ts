@@ -69,13 +69,24 @@ export async function deleteCase(id: string): Promise<void> {
   const record = await getCase(id)
   if (record) {
     for (const a of record.attachments) {
-      await idb.del(STORE_BLOBS, a.blobKey).catch(() => undefined)
+      // Both copies: the working image and the sanitized derivative, which
+      // lives under its own key and would otherwise outlive the case.
+      for (const key of attachmentKeys(a)) {
+        await idb.del(STORE_BLOBS, key).catch(() => undefined)
+      }
     }
   }
   await idb.del(STORE_CASES, id)
 }
 
 // --- attachments -----------------------------------------------------------
+
+/** Every blob key an attachment owns; the derivative may not exist yet. */
+export function attachmentKeys(a: Pick<Attachment, 'blobKey' | 'sanitizedBlobKey'>): string[] {
+  const keys = [a.blobKey]
+  if (a.sanitizedBlobKey && a.sanitizedBlobKey !== a.blobKey) keys.push(a.sanitizedBlobKey)
+  return keys.filter((k) => k.trim().length > 0)
+}
 
 export async function putAttachmentBlob(key: string, blob: Blob): Promise<void> {
   await idb.put(STORE_BLOBS, blob, key)
@@ -191,8 +202,10 @@ export async function exportBackup(): Promise<BackupBundle> {
   const blobs: Record<string, string> = {}
   for (const c of cases) {
     for (const a of c.attachments) {
-      const b = await getAttachmentBlob(a.blobKey)
-      if (b) blobs[a.blobKey] = await blobToDataUrl(b)
+      for (const key of attachmentKeys(a)) {
+        const b = await getAttachmentBlob(key)
+        if (b) blobs[key] = await blobToDataUrl(b)
+      }
     }
   }
   return {

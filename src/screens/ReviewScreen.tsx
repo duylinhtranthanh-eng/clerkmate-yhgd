@@ -14,6 +14,7 @@ import {
   submit,
 } from '../workflow/submission'
 import { formatDateTime } from '../utils/format'
+import { isSubmissionSafe } from '../workflow/privacy'
 
 export function ReviewScreen({
   record,
@@ -30,7 +31,7 @@ export function ReviewScreen({
   const toast = useToast()
   const { profile } = useProfile()
   const missing = missingByTier(completeness, 'mandatory')
-  const unredacted = record.attachments.filter((a) => !a.privacyChecked)
+  const unredacted = record.attachments.filter((a) => !isSubmissionSafe(a))
   const status = caseStatus(record, completeness)
   const blockers = submitBlockers(record, completeness)
   const sub = record.submission
@@ -61,8 +62,9 @@ export function ReviewScreen({
     if (blockers.length > 0) return
     const next = submit(record, student.studentId)
     replace(next)
-    downloadBundle(next)
-    toast(`Đã nộp. Mã bài nộp: ${next.submission.code}`)
+    // No file is pushed at the learner here. What goes to the lecturer is the
+    // PDF; the .json is a portable copy, produced only when asked for.
+    toast(`Đã khoá sửa. Mã bệnh án: ${next.submission.code}`)
   }
 
   const onReopen = () => {
@@ -102,42 +104,53 @@ export function ReviewScreen({
           </div>
         )}
 
-        <div className="btn-row">
-          <button type="button" className="btn btn--primary" style={{ flex: 1 }} onClick={onPrint}>
-            🖨 Xuất PDF
-          </button>
-          {canShare() && (
-            <button
-              type="button"
-              className="btn btn--secondary"
-              onClick={async () => {
-                const ok = await shareSummary(record, profile)
-                if (!ok) toast('Thiết bị không hỗ trợ chia sẻ.')
-              }}
-            >
-              Chia sẻ
-            </button>
-          )}
+        <button type="button" className="btn btn--primary btn--block" onClick={onPrint}>
+          🖨 Xuất PDF
+        </button>
+
+        <p className="small" style={{ margin: '12px 0 0' }}>
+          Trong hộp thoại in, chọn <strong>Lưu thành PDF</strong> (Save as PDF). Trên iPhone: nút Chia sẻ →
+          Lưu vào Tệp. Sau đó <strong>gửi tệp PDF cho giảng viên</strong> qua kênh lớp bạn đang dùng —
+          email, Zalo, LMS hay Drive. ClerkMate không cần giảng viên cài gì cả.
+        </p>
+
+        {canShare() && (
           <button
             type="button"
-            className="btn btn--secondary"
-            onClick={() => {
-              downloadJson(record)
-              toast('Đã tải bản sao dữ liệu ca này.')
+            className="link-btn"
+            style={{ marginTop: 10 }}
+            onClick={async () => {
+              const ok = await shareSummary(record, profile)
+              if (!ok) toast('Thiết bị không hỗ trợ chia sẻ.')
             }}
           >
-            Lưu bản sao dữ liệu
+            Chia sẻ tóm tắt dạng chữ (không kèm PDF)
           </button>
-        </div>
-
-        <p className="tiny muted" style={{ margin: '12px 0 0' }}>
-          Trong hộp thoại in, chọn <strong>Lưu thành PDF</strong> (Save as PDF). Trên iPhone: nút Chia sẻ →
-          Lưu vào Tệp. “Lưu bản sao dữ liệu” tạo tệp <code>.json</code> — bản sao lưu để mở lại trong
-          ClerkMate, không dùng để gửi giảng viên.
-        </p>
+        )}
+        <button
+          type="button"
+          className="link-btn"
+          style={{ marginTop: 6 }}
+          onClick={() => {
+            downloadJson(record)
+            toast('Đã tải bản sao dữ liệu ca này.')
+          }}
+        >
+          Lưu bản sao dữ liệu (.json) — để sao lưu, không phải bản nộp
+        </button>
       </Card>
 
-      <Card title="Nộp bài" className="no-print">
+      {/*
+        Kept, and kept working, but deliberately no longer the destination of
+        the flow: what the lecturer receives is the PDF above. Locking a case
+        is bookkeeping the learner may want — a record of "this is the version
+        I handed in" — so it stays available and clearly labelled as optional.
+      */}
+      <Card title="Khoá bản đã nộp (tuỳ chọn)" className="no-print">
+        <p className="small muted" style={{ marginTop: -4 }}>
+          Không bắt buộc. Bạn gửi bài bằng <strong>tệp PDF</strong> ở trên. Khoá sửa chỉ để đánh dấu
+          đây là bản đã gửi, và ghi lại mã bệnh án cùng thời điểm.
+        </p>
         <div className="row-between" style={{ marginBottom: 10 }}>
           <span className="small muted">Trạng thái hiện tại</span>
           <Badge tone={STATUS[status].tone}>{STATUS[status].label}</Badge>
@@ -161,8 +174,8 @@ export function ReviewScreen({
               )}
             </dl>
             <Notice tone="info">
-              Ca đã khoá sửa. Gửi cho giảng viên <strong>bản PDF</strong> kèm tệp{' '}
-              <code>ClerkMate_{sub.code}.json</code> để giảng viên mở trong mục “Chấm bài”.
+              Ca đã khoá sửa. Thứ gửi cho giảng viên là <strong>tệp PDF</strong> bạn xuất ở trên.
+              Giảng viên đọc PDF bằng công cụ sẵn có, không cần cài ClerkMate.
             </Notice>
             <div className="btn-row" style={{ marginTop: 12 }}>
               <button
@@ -171,7 +184,7 @@ export function ReviewScreen({
                 style={{ flex: 1 }}
                 onClick={() => downloadBundle(record)}
               >
-                ⤓ Tải lại tệp bài nộp
+                ⤓ Tải lại tệp dữ liệu (.json)
               </button>
               <button type="button" className="btn btn--secondary" onClick={onReopen}>
                 🔓 Mở lại để sửa
@@ -188,7 +201,7 @@ export function ReviewScreen({
                 Chưa nộp được: {blockers.join('; ')}.
               </Notice>
             ) : (
-              <Notice tone="ok">Đủ điều kiện nộp. Nên xuất PDF trước, rồi bấm nộp.</Notice>
+              <Notice tone="ok">Đủ điều kiện khoá. Hãy xuất PDF trước, rồi mới khoá sửa.</Notice>
             )}
             <button
               type="button"
@@ -197,7 +210,7 @@ export function ReviewScreen({
               disabled={blockers.length > 0}
               onClick={onSubmit}
             >
-              {blockers.length > 0 ? 'Chưa đủ điều kiện nộp' : '📮 Nộp bài và khoá sửa'}
+              {blockers.length > 0 ? 'Chưa đủ điều kiện khoá' : '📮 Nộp bài và khoá sửa'}
             </button>
             {sub.reopenedAt.length > 0 && (
               <p className="tiny muted" style={{ margin: '10px 0 0' }}>

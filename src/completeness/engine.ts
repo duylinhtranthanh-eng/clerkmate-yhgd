@@ -51,6 +51,7 @@ export function evaluateCompleteness(
       tier,
       satisfied,
       hint: def.hint,
+      bedside: def.bedside === true,
     })
 
     const w = TIER_WEIGHTS[tier]
@@ -87,6 +88,26 @@ export function missingByTier(
   tier: RequirementTier,
 ): CompletenessItemResult[] {
   return snapshot.items.filter((i) => i.tier === tier && !i.satisfied)
+}
+
+/**
+ * The subset a learner should not leave the consultation room without.
+ *
+ * Read off the snapshot rather than the catalogue, so it respects the level:
+ * a Y2 is not asked for a diagnosis, so a diagnosis is not part of their
+ * bedside minimum either.
+ */
+export function bedsideMinimum(snapshot: CompletenessSnapshot): {
+  total: number
+  satisfied: number
+  missing: CompletenessItemResult[]
+} {
+  const items = snapshot.items.filter((i) => i.bedside)
+  return {
+    total: items.length,
+    satisfied: items.filter((i) => i.satisfied).length,
+    missing: items.filter((i) => !i.satisfied),
+  }
 }
 
 export interface SectionProgress {

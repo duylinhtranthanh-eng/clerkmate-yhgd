@@ -23,7 +23,7 @@ const check = (name, pass, detail) => { results.push({ name, pass, detail })
   console.log(`  ${pass ? '✓' : '✗'} ${name}${detail ? ' — ' + detail : ''}`) }
 
 try { execSync(`pkill -f "clerkmate-print-profile" || true`) } catch {}
-try { execSync(`lsof -ti tcp:${PORT} | xargs -r kill -9`) } catch {}
+try { execSync(`lsof -ti tcp:${PORT} | while read p; do kill -9 $p; done`) } catch {}
 execSync(`rm -rf ${PROFILE}`)
 // Always take the browser down, including on the failure paths.
 const shutdown = () => { try { execSync(`rm -rf ${PROFILE}`) } catch {} }
@@ -71,13 +71,34 @@ await ev(H + ' return true')
 const cid = await ev(`return (await window.__cases())[0].id`)
 const go = async (h, w = 1500) => { await ev(`window.location.hash=${JSON.stringify(h)}; return true`); await sleep(w); await ev(H + ' return true') }
 
+console.log('\nwhat the printer sees before the image is sanitized')
+// The demo case ships a deliberately un-redacted lab slip, so at this point the
+// record holds a raw attachment with a thumbnail made from the untouched file.
+// That thumbnail is exactly what must not reach paper.
+await go(`#/case/${cid}/review`)
+const beforeSanitising = await ev(`
+  const c = (await window.__cases()).find(x => x.id === ${JSON.stringify(cid)});
+  const a = c.attachments[0];
+  const doc = document.querySelector('article.doc');
+  return {
+    hasRawThumb: (a.thumbnail || '').length > 100,
+    derivative: a.sanitizedBlobKey || '',
+    printedThumbs: doc.querySelectorAll('.thumbgrid img').length,
+    listed: /Hình ảnh đính kèm/i.test(doc.innerText),
+    line: (doc.innerText.match(/.*CHƯA kiểm tra.*/) || [''])[0].trim(),
+  };
+`)
+check('the raw attachment does have a thumbnail on the device', beforeSanitising.hasRawThumb)
+check('but it has no sanitized derivative yet', beforeSanitising.derivative === '', beforeSanitising.derivative || 'none')
+check('so nothing is printed for it', beforeSanitising.printedThumbs === 0, `${beforeSanitising.printedThumbs} image(s) in the printed grid`)
+check('and the printed list says the image was withheld', /không được in/.test(beforeSanitising.line), beforeSanitising.line || 'no line found')
+
 await go(`#/case/${cid}/s/attachments`)
 await ev(`document.querySelector('.thumb').click(); return true`); await sleep(1200)
 await ev(`window.__btn('Che thông tin trên ảnh').click(); return true`); await sleep(1400)
 await ev(`window.__btn('Che dải trên').click(); return true`); await sleep(700)
 await ev(`window.__btn('Áp dụng').click(); return true`); await sleep(3000)
 await ev(`document.querySelector('.backdrop')?.click(); return true`); await sleep(600)
-const redactedThumb = await ev(`const c=(await window.__cases()).find(x=>x.id===${JSON.stringify(cid)}); return c.attachments[0].thumbnail`)
 await go(`#/case/${cid}/review`)
 await ev(`window.__btn('Nộp bài và khoá sửa').click(); return true`); await sleep(2200)
 await go(`#/case/${cid}/review`)
@@ -122,13 +143,31 @@ const content = await ev(`
     learner: /Nguyễn Văn A/.test(t) && /21YHGD001/.test(t) && /K30/.test(t),
     patient: /Bà H\\. \\(giả lập\\)/.test(t) && /58/.test(t) && /Nội trợ/.test(t),
     levelStamp: /Bệnh án lập ở mức SDH/.test(t),
-    sections: doc.querySelectorAll('section > h2').length,
+    sections: [...doc.querySelectorAll('section > h2')].map((h) => h.textContent.trim()),
+    subHeadings: doc.querySelectorAll('.doc__sub > h3').length,
+    // Nothing about how much help the app gave may appear on a clinical record.
+    appScaffolding: /Mức trợ giúp của ứng dụng|Chế độ rà soát nguy cơ|người học tự nêu|Đã hỏi và không có/.test(t),
+    signedOff: /Sinh viên/.test(t) && /học viên/.test(t) && /Bác sĩ/.test(t) && /Ký và ghi rõ họ tên/.test(t),
+    formTitle: /PHÒNG KHÁM THỰC HÀNH Y HỌC GIA ĐÌNH/.test(t),
     genogramSvg: !!doc.querySelector('svg') && doc.querySelectorAll('svg rect, svg circle').length > 4,
-    attachmentList: /danh mục hình ảnh đính kèm/i.test(t),
+    attachmentList: /Hình ảnh đính kèm/i.test(t),
     // The attachment line must not state one privacy status and then contradict
     // it in the same sentence.
     attachmentSelfConsistent: !(/đã che thông tin định danh/i.test(t) && /CHƯA che thông tin định danh/.test(t)),
-    thumbSrc: (doc.querySelector('.thumbgrid img') || {}).src ?? null,
+    figure: (() => {
+      const img = doc.querySelector('.doc__figures img');
+      if (!img) return null;
+      const cs = getComputedStyle(img);
+      return {
+        // A blob: URL means the full sanitized derivative, not the 320px
+        // list thumbnail that a data: URL would be.
+        fromDerivative: img.src.startsWith('blob:'),
+        natural: [img.naturalWidth, img.naturalHeight],
+        rendered: [Math.round(img.getBoundingClientRect().width), Math.round(img.getBoundingClientRect().height)],
+        objectFit: cs.objectFit,
+        captioned: !!img.closest('figure')?.querySelector('figcaption')?.textContent?.trim(),
+      };
+    })(),
     code: (t.match(/[0-9A-Z]+-\\d{6}-\\d{3}/) || [])[0] ?? null,
     reopens: /Số lần mở lại/.test(t),
     watermarkText: (document.querySelector('.print-watermark span') || {}).textContent ?? null,
@@ -140,13 +179,47 @@ check('document title is present', content.title)
 check('learner name, id and class are printed', content.learner)
 check('patient data are printed and are the fictional demo ones', content.patient)
 check('level stamp is printed', content.levelStamp)
-check('the expected numbered sections are present', content.sections >= 15 && content.sections <= 21,
-  `${content.sections} of up to 21 (empty ones hide themselves)`)
+// A conventional Vietnamese chart, in Roman numerals, in the conventional
+// order — not a dump of the app's twenty-one editing screens.
+// The order and the wording of the department's own paper form
+// (docs/reference/mau-benh-an-yhgd.pdf), not an order of this app's own making.
+const FORM_ORDER = ['Hành chính', 'Lý do khám', 'Sinh hiệu', 'Bệnh sử (Redflag, SOCRATES, ICE)',
+  'Các vấn đề đã và hiện có', 'Tiền sử gia đình', 'Cá nhân', 'Khám hệ cơ quan',
+  'Đề nghị cận lâm sàng · Tóm tắt cận lâm sàng đã có', 'Xác định yếu tố nguy cơ',
+  'Chẩn đoán (ICD-10, ICPC-2)', 'Kế hoạch quản lý', 'Toa thuốc',
+  'Biện pháp duy trì sức khoẻ và tham vấn', 'Sơ đồ cây phả hệ']
+// Blocks with nothing in them hide themselves, so what is asserted is the
+// relative order: every block that did print must appear in the form's
+// sequence, and no printed block may be one the form does not have.
+const printed = content.sections.filter((x) => !/không có trong bệnh án giấy/.test(x))
+const unknown = printed.filter((x) => !FORM_ORDER.includes(x) && !['Theo dõi', 'Hình ảnh đính kèm'].includes(x))
+const positions = printed.filter((x) => FORM_ORDER.includes(x)).map((x) => FORM_ORDER.indexOf(x))
+check('every printed block is one the paper form has', unknown.length === 0, unknown.join(', ') || 'no strays')
+check('the blocks follow the order of the paper form',
+  positions.every((n, i) => i === 0 || n > positions[i - 1]),
+  printed.join(' | ').slice(0, 130))
+check('the form title is the department heading', content.formTitle)
+check('what the paper form does not have is marked as an addition',
+  content.sections.some((x) => /không có trong bệnh án giấy/.test(x)),
+  content.sections[content.sections.length - 1])
+check('no trace of how much the app helped appears on the record', !content.appScaffolding)
+check('the chart carries both signature lines from the form', content.signedOff)
 check('genogram is printed as vector SVG', content.genogramSvg)
 check('attachment list is printed', content.attachmentList)
 check('the attachment line does not contradict its own privacy status', content.attachmentSelfConsistent)
-check('the printed thumbnail is the redacted image', content.thumbSrc === redactedThumb,
-  content.thumbSrc ? 'matches the stored redacted thumbnail' : 'no thumbnail found')
+const fig = content.figure
+check('the attached image is printed at full resolution, not as a list thumbnail',
+  !!fig && fig.fromDerivative && Math.max(...fig.natural) > 400,
+  fig ? `${fig.natural[0]}×${fig.natural[1]}, ${fig.fromDerivative ? 'derivative' : 'thumbnail'}` : 'no image found')
+// The bug this replaces: a square frame with object-fit:cover cut the head and
+// the foot off a portrait lab slip, which is exactly where a slip is read.
+check('the image is printed whole — proportions kept, nothing cropped', (() => {
+  if (!fig) return false
+  const wanted = fig.natural[0] / fig.natural[1]
+  const got = fig.rendered[0] / fig.rendered[1]
+  return fig.objectFit !== 'cover' && Math.abs(wanted - got) / wanted < 0.02
+})(), fig ? `natural ${fig.natural.join('×')} → rendered ${fig.rendered.join('×')} (${fig.objectFit})` : '')
+check('each printed image is captioned', !!fig && fig.captioned)
 check('submission code is printed', !!content.code, content.code)
 check('resubmission metadata is printed', content.reopens)
 check('watermark carries the level and student id', /SDH/.test(content.watermarkText ?? '') && /21YHGD001/.test(content.watermarkText ?? ''),

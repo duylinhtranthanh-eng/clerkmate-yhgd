@@ -193,9 +193,33 @@ Any case can pull in a mock lab slip — **Chèn ảnh xét nghiệm mẫu** in 
 because the people most likely to be trying the redaction tool are exactly the people with no lab
 photo to hand.
 
-Every attachment tracks `redacted` and `privacyChecked`; unchecked images are badged *chưa che* on
-the thumbnail, warned about on the review screen before export, and labelled in the exported list.
-At Y5 and above, having checked them is a mandatory completeness item.
+**A flag is not a fact, so the export gate is a file, not a boolean.** Ticking "no identifiers here"
+used to be enough to let the picked file itself be exported — with whatever EXIF, GPS coordinates
+and camera serial the phone wrote into it. Now every attachment has to produce a *derivative* before
+anything can leave the device, and `sanitizedBlobKey` holds it:
+
+```
+raw local blob  →  redact  or  declare-no-identifiers  →  sanitized derivative  →  PDF / export
+```
+
+Both paths re-encode through a canvas at natural resolution, so metadata has nowhere to survive;
+the redaction path additionally overwrites the original. The picked file stays on the device as the
+working copy and is never the thing exported. `workflow/privacy.ts` is the single place that decides
+what may travel, and it **fails closed** — a record too old to have the field, or malformed for any
+other reason, exports nothing. An attachment with no derivative is dropped from the printed
+thumbnails and its list entry says the image was withheld.
+
+Clinical photos (`clinical_photo`) carry one extra question, asked before the camera opens and again
+in the viewer: is a face visible? A declared face **blocks the image** — it cannot be redacted or
+declared clean, and it is withdrawn from every export path. Blurring eyes is not offered, because a
+blurred face is still a photograph of a person that was taken and stored; the app asks for a crop or
+a retake instead. An unanswered face question also blocks, so silence is not a way through.
+
+Every attachment still tracks `redacted` and `privacyChecked` for display; unchecked images are
+badged *chưa che* on the thumbnail, warned about on the review screen before export, and labelled in
+the exported list. At Y5 and above, having checked them is a mandatory completeness item — measured
+now against the derivative, not the flag. Deleting a case or an image deletes both blobs, and a
+backup carries both.
 
 ### Recall before recognition
 
@@ -462,6 +486,13 @@ and which is why the reflection section exists.
 
 ## Submission states and the hand-in flow
 
+**Where the record actually goes.** The learner's flow ends at the PDF: preview, export, then send
+the file to faculty over whatever channel the class already uses. Faculty install nothing, hold no
+account, and are not expected to import anything — the product delivers its value without requiring
+their adoption. Everything below describes the *optional* machinery around that: a lock that marks
+which version was handed in, and a portable `.json` for backup, device-to-device transfer and
+technical audit. It is kept because it works and is tested, not because the flow depends on it.
+
 A record carries one of **eight processing states**: new · noting · in progress · complete ·
 ready to submit · submitted · accepted · returned for revision.
 
@@ -476,9 +507,11 @@ The hand-in flow (`workflow/submission.ts`) keeps the local-first architecture b
 record rather than the user**: the state and the reviewer's comment travel inside the chart.
 
 1. **Gate.** *Submit* only unlocks when no mandatory requirement is missing **and** every
-   attachment has been redacted. Otherwise the button is disabled and names what is missing.
-2. **Submit.** The app mints a submission code from the student id and date, stamps the time,
-   **locks the record**, and downloads a submission bundle (`.json`).
+   attachment has a sanitized derivative — with clinical photos additionally having answered the
+   face question. Otherwise the button is disabled and names what is missing.
+2. **Submit.** The app mints a submission code from the student id and date, stamps the time and
+   **locks the record**. No file is pushed at the learner: the bundle (`.json`) is written only when
+   they ask for it.
 3. **The lock lives in the data layer.** `useCaseEditor.update()` refuses every edit on a locked
    record and explains why — rather than disabling inputs across 18 section editors, where one
    forgotten screen is a hole.

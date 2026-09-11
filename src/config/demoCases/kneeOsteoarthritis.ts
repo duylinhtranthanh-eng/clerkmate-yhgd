@@ -5,14 +5,14 @@
  * patient and carries the fictional flag in the record itself.
  */
 
-import type { CaseRecord } from '../../types/case'
+import type { CaseRecord, LearnerLevel } from '../../types/case'
 import { createEmptyCase } from '../../types/factory'
 import { uid } from '../../utils/id'
 import { computeBmi, todayIso } from '../../utils/format'
 import { EXAM_NORMAL_BY_ID } from '../clinical'
 
-export function buildKneeOsteoarthritisCase(): CaseRecord {
-  const c = createEmptyCase('SDH', 'Ca mẫu')
+export function buildKneeOsteoarthritisCase(level: LearnerLevel = 'SDH'): CaseRecord {
+  const c = createEmptyCase(level, 'Ca mẫu')
 
   c.patient = {
     ...c.patient,
@@ -156,6 +156,7 @@ export function buildKneeOsteoarthritisCase(): CaseRecord {
     systolic: '140',
     diastolic: '85',
     spo2: '98',
+    bloodGlucose: '5,6 mmol/L',
     heightCm: '155',
     weightKg: '62',
     waistCm: '88',

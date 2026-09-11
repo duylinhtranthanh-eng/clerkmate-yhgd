@@ -10,14 +10,14 @@
  * Fictional throughout.
  */
 
-import type { CaseRecord } from '../../types/case'
+import type { CaseRecord, LearnerLevel } from '../../types/case'
 import { createEmptyCase } from '../../types/factory'
 import { uid } from '../../utils/id'
 import { computeBmi, todayIso } from '../../utils/format'
 import { EXAM_NORMAL_BY_ID } from '../clinical'
 
-export function buildElderlyMultimorbidCase(): CaseRecord {
-  const c = createEmptyCase('SDH', 'Ca mẫu 2')
+export function buildElderlyMultimorbidCase(level: LearnerLevel = 'SDH'): CaseRecord {
+  const c = createEmptyCase(level, 'Ca mẫu 2')
 
   c.patient = {
     ...c.patient,
@@ -177,6 +177,7 @@ export function buildElderlyMultimorbidCase(): CaseRecord {
     systolic: '152',
     diastolic: '88',
     spo2: '95',
+    bloodGlucose: '',
     heightCm: '165',
     weightKg: '58',
     waistCm: '86',

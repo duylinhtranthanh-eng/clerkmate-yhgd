@@ -63,3 +63,7 @@ ClerkMate_*.pdf
 *-backup-*.json
 /backups/
 /exports/
+
+# The department's own paper form. Kept locally as the layout reference for the
+# printed record; it is their document, not ours, so it is not published here.
+docs/reference/

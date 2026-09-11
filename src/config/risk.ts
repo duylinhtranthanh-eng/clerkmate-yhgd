@@ -617,8 +617,15 @@ export const RISK_FACTOR_DEFS: RiskFactorDef[] = [
  *
  * Editable by the teaching team, like every other rule in `config/`.
  */
+/**
+ * Every level is asked to recall before it is shown anything. A checklist is
+ * faster to tick and teaches less, so the catalogue is help that arrives after
+ * the attempt, not the way the work starts. The emergency domain is the one
+ * exception and stays a checklist at every level (see `riskModeFor`): missing a
+ * red flag because you did not happen to think of it is not a teaching moment.
+ */
 export const RISK_MODE_BY_LEVEL: Record<LearnerLevel, RiskDomainMode> = {
-  Y2: 'checklist',
+  Y2: 'recallThenChecklist',
   Y5: 'recallThenChecklist',
   Y6: 'generate',
   SDH: 'generate',

@@ -6,7 +6,7 @@
  * canonical example.
  */
 
-import type { CaseRecord } from '../../types/case'
+import type { CaseRecord, LearnerLevel } from '../../types/case'
 import { putAttachmentBlob, saveCase } from '../../db/repository'
 import { buildKneeOsteoarthritisCase } from './kneeOsteoarthritis'
 import { buildElderlyMultimorbidCase } from './elderlyMultimorbid'
@@ -21,7 +21,7 @@ export interface DemoCaseDef {
   /** What this case is useful for demonstrating. */
   highlights: string[]
   icon: string
-  build: () => CaseRecord
+  build: (level?: LearnerLevel) => CaseRecord
   /** Drawn at seed time, so no image files live in the repo. */
   attachments?: (record: CaseRecord) => Promise<DemoAttachment[]>
 }
@@ -63,8 +63,14 @@ export const DEMO_CASES: DemoCaseDef[] = [
  * The images have to be written to the blob store, so seeding is async and
  * lives here rather than in the pure `build()` functions.
  */
-export async function seedDemoCase(demo: DemoCaseDef): Promise<CaseRecord | null> {
-  const record = demo.build()
+export async function seedDemoCase(
+  demo: DemoCaseDef,
+  level?: LearnerLevel,
+): Promise<CaseRecord | null> {
+  // The demo case is measured at the learner's own level, so onboarding as Y2
+  // and onboarding as SDH genuinely produce different records — which is the
+  // whole claim the app makes about adapting to the learner.
+  const record = demo.build(level)
   if (demo.attachments) {
     try {
       for (const item of await demo.attachments(record)) {

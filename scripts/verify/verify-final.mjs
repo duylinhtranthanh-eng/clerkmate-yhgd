@@ -37,7 +37,7 @@ const check = (name, pass, detail) => {
 }
 
 try { execSync(`pkill -f "clerkmate-final-profile" || true`) } catch {}
-try { execSync(`lsof -ti tcp:${PORT} | xargs -r kill -9`) } catch {}
+try { execSync(`lsof -ti tcp:${PORT} | while read p; do kill -9 $p; done`) } catch {}
 execSync(`rm -rf ${PROFILE}`)
 // Always take the browser down, including on the failure paths.
 const shutdown = () => { try { execSync(`rm -rf ${PROFILE}`) } catch {} }
@@ -172,6 +172,28 @@ check('first screen names the product and what it produces', /ClerkMate/.test(fi
 check('first screen says it is a learning tool, not an EMR', /công cụ học tập|không phải EMR/i.test(first))
 check('first screen says demo data are fictional', /giả lập/i.test(first))
 check('first screen says this is not a login', /không phải đăng nhập/i.test(first))
+// The level chips are the one decision a learner makes with no information,
+// so what each level will ask for has to be visible while they are choosing.
+const levelChoice = await ev(`
+  const rows = [...document.querySelectorAll('.level-table__row')].map((r) => ({
+    level: r.querySelector('.level-table__level')?.textContent?.replace('bạn chọn', '').trim(),
+    count: Number(r.querySelector('.level-table__pct')?.textContent?.trim()),
+    detail: r.querySelector('.level-table__detail')?.textContent?.trim(),
+    current: r.dataset.current === 'true',
+  }));
+  return rows;
+`)
+check('the first screen shows what each of the four levels will ask for',
+  levelChoice.length === 4 && ['Y2', 'Y5', 'Y6', 'SDH'].every((l, i) => levelChoice[i].level === l),
+  levelChoice.map((r) => `${r.level}:${r.count}`).join(' · '))
+check('the levels genuinely ask for different amounts',
+  levelChoice.every((r) => Number.isFinite(r.count)) && levelChoice[0].count < levelChoice[3].count,
+  `${levelChoice[0].count} → ${levelChoice[3].count}`)
+check('the risk section is described as changing with the level',
+  /danh mục/.test(levelChoice[0].detail) && /tự liệt kê/.test(levelChoice[3].detail),
+  levelChoice[3].detail)
+check('the level being chosen is marked', levelChoice.filter((r) => r.current).length === 1,
+  levelChoice.find((r) => r.current)?.level ?? 'none')
 check('nothing but a name and an id stands between the judge and the app', /Hồ sơ người học/.test(first))
 await shot('01-first-open')
 
@@ -261,10 +283,21 @@ await reinstall()
 const compl = await ev(`
   const t = window.__txt();
   const pct = (t.match(/(\\d+)% hoàn chỉnh/) || [])[1];
-  return { pct: Number(pct), tiers: t.match(/Bắt buộc \\d+\\/\\d+|Nên có \\d+\\/\\d+|Nâng cao \\d+\\/\\d+/g) };
+  // Read the summary card itself. The page now also carries a four-level
+  // comparison whose rows quote their own "Bắt buộc x/y", which is a different
+  // claim about a different level.
+  const head = document.querySelector('.card--flat');
+  const tiers = (head?.innerText ?? '').match(/Bắt buộc \\d+\\/\\d+|Nên có \\d+\\/\\d+|Nâng cao \\d+\\/\\d+/g);
+  return { pct: Number(pct), tiers };
 `)
 check('percentage and all three tiers are shown', compl.pct > 0 && compl.tiers?.length === 3, JSON.stringify(compl))
 const levelPreview = {}
+const profileLevel = await ev(`
+  const db = await new Promise((r) => { const q = indexedDB.open('clerkmate'); q.onsuccess = () => r(q.result) });
+  return new Promise((r) => { const t = db.transaction('meta').objectStore('meta').get('learnerProfile');
+    t.onsuccess = () => r(t.result?.level ?? null) });
+`)
+
 for (const level of ['Y2', 'Y5', 'Y6', 'SDH']) {
   await ev(`
     const chip = [...document.querySelectorAll('.chip')].find((c) => c.textContent.trim().startsWith(${JSON.stringify(level)}));
@@ -280,7 +313,12 @@ for (const level of ['Y2', 'Y5', 'Y6', 'SDH']) {
 check('preview changes the requirement set per level', new Set(Object.values(levelPreview).map((v) => v.mandatory)).size >= 3,
   JSON.stringify(levelPreview))
 const officialLevel = await ev(`return (await window.__case(${JSON.stringify(caseId)})).learnerLevel`)
-check('previewing another level does not change the case level', officialLevel === 'SDH', officialLevel)
+check('previewing another level does not change the case level', officialLevel === profileLevel,
+  `case ${officialLevel} vs profile ${profileLevel}`)
+// A judge who signs in as Y2 must not be handed a postgraduate record: the demo
+// is built at the learner's own level, which is the app's central claim.
+check('the demo case is created at the level the judge signed in with',
+  officialLevel === profileLevel, `${officialLevel} / ${profileLevel}`)
 await shot('05-completeness')
 check('a missing item navigates to its section', await ev(`
   const btn = [...document.querySelectorAll('.list__item')].find((b) => /Đã che thông tin định danh/.test(b.textContent));
@@ -291,6 +329,8 @@ check('a missing item navigates to its section', await ev(`
 `))
 
 // =========================================================== redaction
+
+// =========================================================== image redaction
 G('image redaction')
 await go(`#/case/${caseId}/s/attachments`)
 await reinstall()
@@ -585,65 +625,34 @@ check('editing works again after reopening', await ev(`
 `))
 
 // =========================================================== teacher grading
-G('teacher grading and return')
+G('the final screen — where the learner flow ends')
 await go(`#/case/${caseId}/review`, 1400)
 await reinstall()
-await ev(`window.__caught = []; window.__btn('Nộp bài và khoá sửa').click(); return true`)
-await sleep(2000)
-const bundle = await ev(`return window.__caught.length ? await window.__caught[0].text() : null`)
-check('submitting exports a bundle file', !!bundle && bundle.length > 500)
-await go('#/cham-bai', 1400)
-await reinstall()
-await ev(`
-  const fi = document.querySelector('input[type=file]');
-  const dt = new DataTransfer(); dt.items.add(new File([${JSON.stringify(bundle ?? '{}')}], 'b.json', { type: 'application/json' }));
-  fi.files = dt.files; fi.dispatchEvent(new Event('change', { bubbles: true }));
-  return true;
-`)
-await sleep(2000)
-const grading = await ev(`
+const finalActions = await ev(`
   const t = window.__txt();
-  return { showsLearner: /BGK01/.test(t), showsCode: /-\\d{6}-\\d{3}/.test(t),
-           showsCompleteness: /Mức hoàn chỉnh/.test(t), noAuthClaim: /Không có xác thực/.test(t),
-           hasReturn: !!window.__btn('Trả lại để bổ sung'), hasAccept: !!window.__btn('Chấp nhận') };
+  const primary = [...document.querySelectorAll('.btn--primary')].map((b) => b.textContent.trim());
+  return {
+    pdfIsPrimary: primary.some((x) => /Xuất PDF/.test(x)),
+    pdfHandoffStated: /gửi tệp PDF cho giảng viên/i.test(t),
+    jsonNotTheSubmission: /không phải bản nộp/.test(t),
+    lockIsOptional: /tuỳ chọn/.test(t),
+  };
 `)
-check('grading screen shows learner, code and completeness', grading.showsLearner && grading.showsCode && grading.showsCompleteness)
-check('grading screen states it does not authenticate the reviewer', grading.noAuthClaim)
-check('both decisions are offered', grading.hasReturn && grading.hasAccept)
-await shot('08-grading')
-await ev(`window.__caught = [];
-  window.__set(document.querySelector('input[type=text], input:not([type])'), 'BS. Trần Thị B');
-  return true;`)
-await sleep(400)
-await ev(`window.__set(document.querySelector('textarea'), 'Bổ sung can thiệp té ngã rồi nộp lại.'); return true`)
-await sleep(400)
-await ev(`window.__btn('Trả lại để bổ sung').click(); return true`)
-await sleep(2000)
-const returned = await ev(`return window.__caught.length ? await window.__caught[0].text() : null`)
-check('a comment is required and the return file is produced', !!returned)
-await go('#/', 1400)
-await reinstall()
-await ev(`
-  const fi = [...document.querySelectorAll('input[type=file]')][0];
-  const dt = new DataTransfer(); dt.items.add(new File([${JSON.stringify(returned ?? '{}')}], 'r.json', { type: 'application/json' }));
-  fi.files = dt.files; fi.dispatchEvent(new Event('change', { bubbles: true }));
-  return true;
-`)
-await sleep(2200)
-const afterReturn = await ev(`
-  const t = window.__txt();
-  const c = await window.__case(${JSON.stringify(caseId)});
-  return { badge: /Trả lại để bổ sung/.test(t), unread: /Nhận xét mới/.test(t),
-           unlocked: c.submission.locked === false, reviews: c.submission.reviews.length };
-`)
-check('returned case is badged and unlocked', afterReturn.badge && afterReturn.unlocked, JSON.stringify(afterReturn))
-check('unread comment is announced', afterReturn.unread)
-check('feedback history is kept', afterReturn.reviews === 1)
-await go(`#/case/${caseId}/record`, 1400)
-check('the comment is shown verbatim inside the case', await ev(`
-  return /Bổ sung can thiệp té ngã rồi nộp lại\\./.test(window.__txt());
+check('the final screen makes exporting a PDF the primary action', finalActions.pdfIsPrimary)
+check('it tells the learner to send the PDF to the lecturer', finalActions.pdfHandoffStated)
+check('it says the .json is not the submission', finalActions.jsonNotTheSubmission)
+check('locking the case is presented as optional', finalActions.lockIsOptional)
+check('there is no grading entry point anywhere in the app', await ev(`
+  window.location.hash = '#/cham-bai';
+  await new Promise((r) => setTimeout(r, 1200));
+  const stray = [...document.querySelectorAll('button, a, label')]
+    .map((b) => b.textContent || '')
+    .filter((x) => /Chấm bài|giảng viên gửi về/.test(x));
+  window.location.hash = '#/';
+  await new Promise((r) => setTimeout(r, 900));
+  // A removed route must not render a grading screen, and Home must not offer one.
+  return stray.length === 0 && !/Chấm bài/.test(window.__txt());
 `))
-await shot('09-returned')
 
 // =========================================================== privacy of traffic
 G('privacy of network traffic')
@@ -685,7 +694,7 @@ check('manifest asks for a standalone install', manifest.display === 'standalone
 console.log(REMOTE ? '\n  (going offline)' : '\n  (stopping the server)')
 if (!REMOTE) {
   // Locally the strongest proof is to take the server away entirely.
-  try { execSync('lsof -ti tcp:4191 | xargs -r kill -9') } catch {}
+  try { execSync('lsof -ti tcp:4191 | while read p; do kill -9 $p; done') } catch {}
 }
 // Mark where the offline phase starts, so the requests made during it can be
 // counted. A shell that renders without a single network request for its own
@@ -708,13 +717,23 @@ const offline = await ev(`
 // response for its own document or bundles came out of the cache — which is the
 // claim under test, and it holds whether or not the emulated offline state
 // reaches the service worker's own fetches.
-const offlineFetches = events.slice(offlineFrom)
+const offlineResponses = events.slice(offlineFrom)
   .filter((e) => e.method === 'Network.responseReceived')
-  .map((e) => e.params.response.url)
-  .filter((u) => u.startsWith(new URL(BASE).origin) && !u.includes('probe-'))
+  .map((e) => e.params.response)
+  .filter((r) => r.url.startsWith(new URL(BASE).origin) && !r.url.includes('probe-'))
+// Provenance, not absence. Chrome reports a service-worker-served response as
+// a `responseReceived` too, so counting events cannot tell cache from network;
+// what distinguishes them is `fromServiceWorker`. With the origin's server
+// killed, every response for the app's own URLs must carry that flag — and
+// there must be at least one, or nothing was demonstrated at all.
+const fromNetwork = offlineResponses.filter((r) => r.fromServiceWorker !== true)
+const offlineFetches = fromNetwork.map((r) => r.url)
 if (!REMOTE) {
-  check('the shell was served from cache, with no network response for it',
-    offlineFetches.length === 0, offlineFetches.slice(0, 2).join(' ') || 'no network responses in the offline phase')
+  check('the shell was served by the service worker, with the server switched off',
+    offlineResponses.length > 0 && fromNetwork.length === 0,
+    fromNetwork.length
+      ? `bypassed the worker: ${offlineFetches.slice(0, 2).join(' ')}`
+      : `${offlineResponses.length} response(s), all from the service worker`)
 }
 if (REMOTE) {
   // Emulated offline does not reach a service worker's own fetches, and a
@@ -746,6 +765,18 @@ check('local parser still works offline', await ev(`
 await shot('10-offline')
 
 await mkdir(OUT, { recursive: true })
+check('both demo cases can be created in one tap', await ev(`
+  window.location.hash = '#/';
+  await new Promise((r) => setTimeout(r, 1200));
+  const add = [...document.querySelectorAll('button')].find((x) => /Thêm ca mẫu/.test(x.textContent));
+  if (add) { add.click(); await new Promise((r) => setTimeout(r, 800)); }
+  const all = [...document.querySelectorAll('button')].find((x) => /Tạo cả \\d+ ca mẫu/.test(x.textContent));
+  if (!all) return false;
+  all.click();
+  await new Promise((r) => setTimeout(r, 7000));
+  return (await window.__cases()).length >= 2;
+`))
+
 await writeFile(`${OUT}/results.json`, JSON.stringify(results, null, 2))
 const failed = results.filter((r) => !r.pass)
 console.log(`\n${results.length - failed.length}/${results.length} checks passed`)

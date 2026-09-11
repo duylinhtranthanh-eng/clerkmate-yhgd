@@ -12,7 +12,6 @@ import { RecordIndexScreen } from './screens/RecordIndexScreen'
 import { CompletenessScreen } from './screens/CompletenessScreen'
 import { GenogramScreen } from './screens/GenogramScreen'
 import { ReviewScreen } from './screens/ReviewScreen'
-import { FacultyReviewScreen } from './screens/FacultyReviewScreen'
 import { SectionScreen } from './screens/SectionScreen'
 import { SECTION_BY_ID } from './config/sections'
 import { useAppUpdate } from './hooks/useAppUpdate'
@@ -72,7 +71,6 @@ function Routes() {
     <>
       {route.name === 'home' && <HomeScreen navigate={navigate} />}
       {route.name === 'settings' && <SettingsScreen back={back} />}
-      {route.name === 'review-inbox' && <FacultyReviewScreen back={() => navigate({ name: 'home' })} />}
       {(route.name === 'case' || route.name === 'section') && (
         <CaseShell route={route} navigate={navigate} />
       )}

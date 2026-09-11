@@ -2,21 +2,28 @@ import { useEffect, useState } from 'react'
 import type {
   Attachment,
   AttachmentCategory,
+  FaceCheck,
   InvestigationResult,
   ResultFlag,
 } from '../../types/case'
 import { Badge, Card, Chip, Field, Notice, Select, TextArea, TextInput } from '../../components/Ui'
 import { RepeatList } from '../../components/RepeatList'
 import { Sheet } from '../../components/Sheet'
-import { ATTACHMENT_CATEGORIES, COMMON_INVESTIGATIONS } from '../../config/clinical'
+import {
+  ATTACHMENT_CATEGORIES,
+  CLINICAL_PHOTO_CHECKS,
+  CLINICAL_PHOTO_WARNING,
+  COMMON_INVESTIGATIONS,
+} from '../../config/clinical'
 import {
   attachmentObjectUrl,
+  attachmentKeys,
   deleteAttachmentBlob,
   getAttachmentBlob,
   putAttachmentBlob,
 } from '../../db/repository'
 import { RedactEditor } from '../../components/RedactEditor'
-import { makeThumbnail } from '../../utils/image'
+import { makeThumbnail, neutralAttachmentName, sanitizeImage } from '../../utils/image'
 import { buildSampleAttachment } from '../../config/demoCases/demoAttachments'
 import { uid } from '../../utils/id'
 import { todayIso } from '../../utils/format'
@@ -69,6 +76,7 @@ export function InvestigationsSection({ record, update }: SectionProps) {
         t.mimeType = redacted.type || 'image/jpeg'
         t.redacted = true
         t.privacyChecked = true
+        t.sanitizedBlobKey = t.blobKey
       }
     })
     setRedacting(null)
@@ -386,6 +394,69 @@ export function InvestigationsSection({ record, update }: SectionProps) {
  * attachments list: a photo of a lab slip *is* the result, and it needs the
  * same date and the same reading as a typed one.
  */
+/**
+ * The questions a clinical photo has to answer before it can leave the phone.
+ *
+ * The face question is deliberately not one checkbox among several: a declared
+ * face has no remedy inside the app. Blurring or painting over it still leaves
+ * a photograph of a person, so the only two answers offered are "no face" and
+ * "there is a face" — and the second one withdraws the image from everything
+ * that leaves the device rather than pretending a filter fixed it.
+ */
+function ClinicalPhotoChecklist({
+  attachment,
+  locked,
+  onFace,
+}: {
+  attachment: Attachment
+  locked: boolean
+  onFace: (next: FaceCheck) => void
+}) {
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <strong style={{ fontSize: 14, display: 'block', marginBottom: 8 }}>
+        Kiểm tra ảnh lâm sàng
+      </strong>
+      <Notice tone="warn">{CLINICAL_PHOTO_WARNING}</Notice>
+      <ul className="small" style={{ margin: '10px 0', paddingLeft: 20 }}>
+        {CLINICAL_PHOTO_CHECKS.filter((c) => c.key !== 'noFace').map((c) => (
+          <li key={c.key}>{c.label}</li>
+        ))}
+      </ul>
+      <div className="chips">
+        <Chip
+          small
+          tone="ok"
+          on={attachment.faceCheck === 'none'}
+          onClick={() => !locked && onFace(attachment.faceCheck === 'none' ? '' : 'none')}
+        >
+          Không có khuôn mặt
+        </Chip>
+        <Chip
+          small
+          tone="danger"
+          on={attachment.faceCheck === 'present'}
+          onClick={() => !locked && onFace(attachment.faceCheck === 'present' ? '' : 'present')}
+        >
+          Có khuôn mặt
+        </Chip>
+      </div>
+      {attachment.faceCheck === 'present' && (
+        <Notice tone="warn">
+          <strong>Ảnh này không dùng được.</strong> Làm mờ mắt là chưa đủ — hãy{' '}
+          <strong>cắt bỏ</strong> phần khuôn mặt rồi thêm lại, hoặc xoá ảnh và chụp lại chỉ vùng tổn
+          thương.
+        </Notice>
+      )}
+      {attachment.faceCheck === '' && (
+        <p className="small muted" style={{ margin: '8px 0 0' }}>
+          Chưa trả lời. Ảnh lâm sàng chưa trả lời câu này thì không nộp bài được.
+        </p>
+      )}
+    </div>
+  )
+}
+
 function ResultImage({
   record,
   update,
@@ -414,14 +485,19 @@ function ResultImage({
         d.attachments.push({
           id: attachmentId,
           category: 'lab',
+          // Never the picked file's name: a phone gallery is full of files
+          // called things like "NguyenVanA_ECG_2026.jpg", and that name would
+          // travel into the record and the printed catalogue.
           title: result.name || 'Kết quả cận lâm sàng',
           date: result.date,
           note: '',
           mimeType: file.type,
           thumbnail,
           blobKey,
+          sanitizedBlobKey: '',
           redacted: false,
           privacyChecked: false,
+          faceCheck: '',
           createdAt: new Date().toISOString(),
         })
         const target = d.investigations.results.find((r) => r.id === result.id)
@@ -519,8 +595,18 @@ function ResultImage({
   )
 }
 
+const CATEGORY_LABEL: Record<AttachmentCategory, string> =
+  Object.fromEntries(ATTACHMENT_CATEGORIES.map((c) => [c.id, c.label])) as Record<AttachmentCategory, string>
+
 export function AttachmentsSection({ record, update }: SectionProps) {
   const [viewing, setViewing] = useState<Attachment | null>(null)
+  /**
+   * Chosen before the camera opens, not after.
+   *
+   * A clinical photo needs its warning shown *before* the shutter, and the
+   * category is what decides which privacy questions the image has to answer.
+   */
+  const [pendingCategory, setPendingCategory] = useState<AttachmentCategory>('lab')
   const [viewUrl, setViewUrl] = useState<string | null>(null)
   const [redactBlob, setRedactBlob] = useState<Blob | null>(null)
   const [busy, setBusy] = useState(false)
@@ -539,6 +625,9 @@ export function AttachmentsSection({ record, update }: SectionProps) {
   /** Replaces the stored image with the redacted one; the original is gone. */
   const applyRedaction = async (attachment: Attachment, redacted: Blob) => {
     if (refuseIfLocked()) return
+    // The redacted image is already a canvas re-encode, so it carries no EXIF
+    // and the original it replaces is gone. One artifact remains, and it is the
+    // one allowed to leave the device.
     await putAttachmentBlob(attachment.blobKey, redacted)
     const thumbnail = await makeThumbnail(redacted)
     update((d) => {
@@ -548,11 +637,60 @@ export function AttachmentsSection({ record, update }: SectionProps) {
         t.mimeType = redacted.type || 'image/jpeg'
         t.redacted = true
         t.privacyChecked = true
+        t.sanitizedBlobKey = t.blobKey
       }
     })
     setRedactBlob(null)
     setViewing((prev) => (prev ? { ...prev, thumbnail, redacted: true, privacyChecked: true } : prev))
     toast('Đã che và ghi đè lên ảnh gốc.')
+  }
+
+  /**
+   * "This image carries no identifiers" — which is a statement about the
+   * picture, not about the file.
+   *
+   * It used to set a flag and leave the original bytes untouched, so an image
+   * that had never been through any processing became eligible for the printed
+   * record with its EXIF and GPS intact. It now produces the same kind of
+   * derivative a redaction produces; the flag alone is no longer enough to let
+   * an image leave the device.
+   */
+  const declareClean = async (attachment: Attachment) => {
+    if (refuseIfLocked()) return
+    setBusy(true)
+    try {
+      const raw = await getAttachmentBlob(attachment.blobKey)
+      if (!raw) {
+        toast('Không đọc được ảnh gốc.')
+        return
+      }
+      const clean = await sanitizeImage(raw)
+      const sanitizedKey = uid('blob')
+      await putAttachmentBlob(sanitizedKey, clean)
+      // Declaring twice would otherwise strand the earlier derivative in the
+      // blob store with nothing pointing at it.
+      if (attachment.sanitizedBlobKey && attachment.sanitizedBlobKey !== attachment.blobKey) {
+        await deleteAttachmentBlob(attachment.sanitizedBlobKey)
+      }
+      const thumbnail = await makeThumbnail(clean)
+      update((d) => {
+        const t = d.attachments.find((x) => x.id === attachment.id)
+        if (t) {
+          t.sanitizedBlobKey = sanitizedKey
+          t.privacyChecked = true
+          t.thumbnail = thumbnail
+          t.mimeType = clean.type || 'image/jpeg'
+        }
+      })
+      setViewing((prev) =>
+        prev ? { ...prev, sanitizedBlobKey: sanitizedKey, privacyChecked: true, thumbnail } : prev,
+      )
+      toast('Đã tạo bản sao đã làm sạch dữ liệu ẩn (EXIF, GPS).')
+    } catch {
+      toast('Không tạo được bản sao đã làm sạch.')
+    } finally {
+      setBusy(false)
+    }
   }
 
   const openRedactor = async (attachment: Attachment) => {
@@ -585,22 +723,29 @@ export function AttachmentsSection({ record, update }: SectionProps) {
     if (refuseIfLocked()) return
     setBusy(true)
     try {
+      let index = record.attachments.length
       for (const file of Array.from(files)) {
+        index += 1
         const blobKey = uid('blob')
         await putAttachmentBlob(blobKey, file)
         const thumbnail = file.type.startsWith('image/') ? await makeThumbnail(file) : ''
         update((d) =>
           void d.attachments.push({
             id: uid('att'),
-            category: 'lab',
-            title: file.name.replace(/\.[^.]+$/, ''),
+            category: pendingCategory,
+            // The picked file's name is dropped on purpose. Phone galleries are
+            // full of names like "NguyenVanA_ECG_2026.jpg", and that name would
+            // travel straight into the record and the printed catalogue.
+            title: neutralAttachmentName(index, CATEGORY_LABEL[pendingCategory]),
             date: todayIso(),
             note: '',
             mimeType: file.type,
             thumbnail,
             blobKey,
+            sanitizedBlobKey: '',
             redacted: false,
             privacyChecked: false,
+            faceCheck: '',
             createdAt: new Date().toISOString(),
           }),
         )
@@ -631,7 +776,7 @@ export function AttachmentsSection({ record, update }: SectionProps) {
 
   const removeAttachment = async (a: Attachment) => {
     if (refuseIfLocked()) return
-    await deleteAttachmentBlob(a.blobKey)
+    for (const key of attachmentKeys(a)) await deleteAttachmentBlob(key)
     update((d) => {
       d.attachments = d.attachments.filter((x) => x.id !== a.id)
     })
@@ -650,6 +795,27 @@ export function AttachmentsSection({ record, update }: SectionProps) {
             <strong>Xem trước</strong> nếu cần bổ sung.
           </Notice>
         )}
+        <Field label="Loại ảnh sắp thêm" help="Chọn trước khi chụp — loại ảnh quyết định phải kiểm tra những gì.">
+          <div className="chips">
+            {ATTACHMENT_CATEGORIES.map((c) => (
+              <Chip
+                key={c.id}
+                small
+                on={pendingCategory === c.id}
+                onClick={() => setPendingCategory(c.id)}
+              >
+                {c.icon} {c.label}
+              </Chip>
+            ))}
+          </div>
+        </Field>
+
+        {pendingCategory === 'clinical_photo' && (
+          <Notice tone="warn">
+            <strong>{CLINICAL_PHOTO_WARNING}</strong>
+          </Notice>
+        )}
+
         <label
           className="btn btn--primary btn--block"
           style={{ cursor: locked ? 'not-allowed' : 'pointer', opacity: locked ? 0.55 : 1 }}
@@ -791,6 +957,28 @@ export function AttachmentsSection({ record, update }: SectionProps) {
             </Field>
             <div className="hr" />
 
+            {viewing.category === 'clinical_photo' && (
+              <ClinicalPhotoChecklist
+                attachment={viewing}
+                locked={locked}
+                onFace={(faceCheck) => {
+                  setViewing((prev) => (prev ? { ...prev, faceCheck } : prev))
+                  update((d) => {
+                    const t = d.attachments.find((x) => x.id === viewing.id)
+                    if (t) {
+                      t.faceCheck = faceCheck
+                      // A face makes the image unusable, whatever was ticked
+                      // before: the derivative is withdrawn rather than kept.
+                      if (faceCheck === 'present') {
+                        t.sanitizedBlobKey = ''
+                        t.privacyChecked = false
+                      }
+                    }
+                  })
+                }}
+              />
+            )}
+
             <div className="row-between" style={{ marginBottom: 8 }}>
               <strong style={{ fontSize: 14 }}>Thông tin định danh bệnh nhân</strong>
               {viewing.redacted ? (
@@ -818,7 +1006,7 @@ export function AttachmentsSection({ record, update }: SectionProps) {
                   <button
                     type="button"
                     className="btn btn--primary btn--sm"
-                    disabled={locked}
+                    disabled={locked || viewing.faceCheck === 'present'}
                     onClick={() => void openRedactor(viewing)}
                   >
                     ✏️ Che thông tin trên ảnh
@@ -827,16 +1015,10 @@ export function AttachmentsSection({ record, update }: SectionProps) {
                     <button
                       type="button"
                       className="btn btn--secondary btn--sm"
-                      disabled={locked}
-                      onClick={() => {
-                        setViewing({ ...viewing, privacyChecked: true })
-                        update((d) => {
-                          const t = d.attachments.find((x) => x.id === viewing.id)
-                          if (t) t.privacyChecked = true
-                        })
-                      }}
+                      disabled={locked || busy || viewing.faceCheck === 'present'}
+                      onClick={() => void declareClean(viewing)}
                     >
-                      Ảnh này không có thông tin định danh
+                      {busy ? 'Đang xử lý…' : 'Ảnh này không có thông tin định danh'}
                     </button>
                   )}
                 </div>
