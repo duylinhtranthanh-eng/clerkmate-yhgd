@@ -15,20 +15,22 @@ import { stripDiacritics } from '../parsing/text'
 const slug = (s: string) => stripDiacritics(s).replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '')
 
 /**
- * e.g. `ClerkMate_21YHGD001_BGK01-260911-847_2026-09-11`.
+ * e.g. `ClerkMate_21YHGD001_Ba-H_2026-09-11`.
  *
- * Identifies the *learner* and the *case*, never the patient. A filename is the
- * one part of an export that travels outside the file — it shows up in a chat
- * preview, a download list, an email subject line, a projector — so the
- * patient's name has no business in it, whatever is inside the document. The
- * case is named by its submission code, or failing that by the learner's own
- * label for it.
+ * Carries the learner's code, the case, and the date, so a teacher collecting a
+ * class's worth of files can sort them. The case is named the way the learner
+ * named it — in practice an abbreviation such as "Bà H." rather than a full
+ * name, which is how these records are written — falling back to the submission
+ * code, then the learner's own label.
  */
 export function buildFileName(record: CaseRecord, profile: LearnerProfile | null = null): string {
   const date = (record.visit.date || record.createdAt).slice(0, 10)
   const learner = slug(profile?.studentId ?? '') || 'nguoi-hoc'
   const caseRef =
-    slug(record.submission.code) || slug(record.patient.caseLabel) || `ca-${record.id.slice(-6)}`
+    slug(record.patient.name) ||
+    slug(record.submission.code) ||
+    slug(record.patient.caseLabel) ||
+    `ca-${record.id.slice(-6)}`
   return `ClerkMate_${learner}_${caseRef}_${date}`
 }
 

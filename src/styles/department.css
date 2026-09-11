@@ -1,0 +1,230 @@
+/* --------------------------------------------------------------------------
+   The department's paper record.
+
+   Deliberately unlike the rest of the app: hairline black rules, square
+   corners, no colour, no shadow, text packed tight. It is trying to look like
+   a photocopied form, because that is what a teacher expects to receive and
+   what makes the printed pages legible at 10pt.
+
+   Screen and paper share these rules so that what the learner previews is what
+   comes out of the printer; only the page sizing differs.
+   -------------------------------------------------------------------------- */
+
+.dept {
+  --dept-rule: #000;
+  background: #fff;
+  color: #000;
+  font-size: 10.5px;
+  line-height: 1.32;
+}
+
+.department-page {
+  border: 1px solid var(--dept-rule);
+  padding: 6px;
+  margin-bottom: 14px;
+  background: #fff;
+}
+.department-page + .department-page { margin-top: 0; }
+
+/* Learner strip. The form is about the patient; this says whose work it is. */
+.dept-learner {
+  border-bottom: 1px solid var(--dept-rule);
+  padding-bottom: 3px;
+  margin-bottom: 4px;
+  font-size: 9.5px;
+}
+
+/* Two columns side by side, the way the form splits a page. */
+.dept-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border: 1px solid var(--dept-rule);
+  border-bottom: 0;
+}
+.dept-row--head { grid-template-columns: 1.15fr 1fr; }
+.dept-row:last-of-type { border-bottom: 1px solid var(--dept-rule); }
+.dept-row--plain {
+  display: flex;
+  gap: 14px;
+  border: 0;
+  flex-wrap: wrap;
+}
+
+.dept-cell {
+  padding: 4px 5px;
+  border-right: 1px solid var(--dept-rule);
+  border-bottom: 1px solid var(--dept-rule);
+  min-width: 0;
+}
+.dept-cell:last-child { border-right: 0; }
+.dept-cell--flush { padding: 0; }
+.dept-cell--flush > .dept-box__h { padding: 3px 5px; }
+.dept-cell--2 { grid-column: span 1; }
+
+/* The form's masthead cell. */
+.dept-cell--title {
+  display: grid;
+  place-items: center;
+  text-align: center;
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: 0.02em;
+  line-height: 1.3;
+}
+
+.dept-cell--admin .dept-f { margin-bottom: 1px; }
+
+/* label: value */
+.dept-f { margin: 0 0 2px; }
+.dept-f--block .dept-f__value { display: block; }
+.dept-f__label { font-weight: 700; }
+.dept-f__value { white-space: pre-wrap; }
+
+.dept-box {
+  border: 1px solid var(--dept-rule);
+  border-top: 0;
+}
+.dept-box:first-child { border-top: 1px solid var(--dept-rule); }
+.dept-box__body { padding: 4px 5px; }
+.dept-box__h {
+  font-weight: 700;
+  border-bottom: 1px solid var(--dept-rule);
+  padding: 3px 5px;
+  margin: 0 -5px 4px;
+}
+.dept-box__h--c { text-align: center; }
+.dept-box > .dept-box__h { margin: 0; }
+.dept-cell > .dept-box__h:first-child { margin-top: -4px; }
+
+.dept-free {
+  white-space: pre-wrap;
+  min-height: 2.4em;
+}
+
+/* Tables carry the form's own grids. */
+.dept-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.dept-table th,
+.dept-table td {
+  border: 1px solid var(--dept-rule);
+  padding: 2px 4px;
+  vertical-align: top;
+  word-wrap: break-word;
+  overflow-wrap: anywhere;
+}
+.dept-table th { font-weight: 700; text-align: center; }
+.dept-table--vitals td { text-align: center; height: 18px; }
+.ta-c { text-align: center; }
+.w-8 { width: 8%; }
+.w-20 { width: 20%; }
+.w-22 { width: 22%; }
+.w-24 { width: 24%; }
+.w-28 { width: 28%; }
+.w-34 { width: 34%; }
+.w-40 { width: 40%; }
+.w-50 { width: 50%; }
+
+.dept-tick { font-size: 12px; line-height: 1; }
+
+/* Organ systems: label, box, and room to describe an abnormality. */
+.dept-exam {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  /* The form fills its left column top to bottom before starting the right —
+     Tổng trạng…Bụng, then Vú…Tâm lý — so the reading order matches the paper. */
+  grid-auto-flow: column;
+  grid-template-rows: repeat(5, auto);
+  column-gap: 10px;
+}
+.dept-exam__row {
+  display: grid;
+  grid-template-columns: 76px 16px 1fr;
+  align-items: start;
+  gap: 4px;
+  border-bottom: 1px solid var(--dept-rule);
+  padding: 2px 0;
+}
+.dept-exam__label { font-weight: 600; }
+.dept-exam__text { white-space: pre-wrap; min-height: 1.3em; }
+
+/* Numbered prescription lines, blanks kept so the form still reads as a form. */
+.dept-rx { margin: 2px 0 0; padding-left: 18px; }
+.dept-rx li { border-bottom: 1px solid var(--dept-rule); padding: 1px 0; }
+.dept-rx__blank { min-height: 1.25em; list-style: decimal; }
+
+.dept-sign .dept-cell { min-height: 46px; }
+
+.dept-legend { list-style: none; margin: 4px 0 0; padding: 0; }
+.dept-legend li { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
+.geno-key {
+  width: 12px;
+  height: 12px;
+  border: 1px solid var(--dept-rule);
+  display: inline-block;
+  position: relative;
+}
+.geno-key--f { border-radius: 50%; }
+.geno-key--ill { background: #000; }
+.geno-key--dead::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-top: 1px solid var(--dept-rule);
+  transform: rotate(-45deg);
+  transform-origin: center;
+}
+
+.dept-figures { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.dept-figures figure { margin: 0; }
+.dept-figures img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--dept-rule);
+}
+.dept-figures figcaption { font-size: 9px; }
+
+@media print {
+  /* No @page here on purpose: print.css already sets A4 and the margins, and a
+     second @page rule would silently re-margin the learning report too. */
+  /* Tight enough that a full postgraduate case still lands on one sheet per
+     official page. `break-inside: avoid` is deliberately absent: a page whose
+     content genuinely exceeds a sheet cannot honour it, and asking anyway 
+     makes Chrome emit a blank sheet before spilling anyway. */
+  .dept { font-size: 8pt; line-height: 1.12; }
+  .dept-table { line-height: 1.08; }
+  .department-page {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    break-after: page;
+    page-break-after: always;
+  }
+  .department-page:last-child { break-after: auto; page-break-after: auto; }
+
+  .dept-cell--title { font-size: 13pt; }
+  .dept-learner { font-size: 7.6pt; padding-bottom: 2pt; margin-bottom: 3pt; }
+  .dept-cell { padding: 2pt 3pt; }
+  .dept-f { margin-bottom: 1pt; }
+  .dept-table th, .dept-table td { padding: 0.8pt 2.5pt; }
+  .dept-table--vitals td { height: 14pt; }
+  .dept-box__h { padding: 1.5pt 3pt; }
+  .dept-exam__row { padding: 0; }
+  .dept-exam__text { min-height: 1em; }
+  .dept-rx li { padding: 0; }
+  .dept-rx__blank { min-height: 0.95em; }
+  .dept-sign .dept-cell { min-height: 11pt; }
+
+  /* Page 4. The genogram is the only drawing in the record, so it is given
+     room — but a tall family tree must not push the screening schedule onto a
+     sheet of its own, hence a ceiling rather than a free run. */
+  .page-4 .dept-row--grow { grid-template-columns: 0.42fr 1fr; }
+  .page-4 .geno-wrap svg { max-height: 95mm; width: auto; max-width: 100%; }
+  .dept-figures img { max-height: 95mm; }
+  .dept-free { min-height: 0.9em; }
+  .dept-figures img { max-height: 60mm; width: auto; max-width: 100%; }
+  .geno-wrap { border: 0; padding: 0; }
+}

@@ -77,6 +77,10 @@ console.log('\nwhat the printer sees before the image is sanitized')
 // That thumbnail is exactly what must not reach paper.
 await go(`#/case/${cid}/review`)
 const beforeSanitising = await ev(`
+  // Both exports share one privacy gate; these assertions read the learning
+  // report, which is where the printed thumbnails live.
+  const chip = [...document.querySelectorAll('.chip')].find((c) => /Bản học tập/.test(c.textContent));
+  if (chip && chip.dataset.on !== 'true') { chip.click(); await new Promise((r) => setTimeout(r, 900)); }
   const c = (await window.__cases()).find(x => x.id === ${JSON.stringify(cid)});
   const a = c.attachments[0];
   const doc = document.querySelector('article.doc');
@@ -107,6 +111,50 @@ await ev(`window.__btn('Mở lại để sửa').click(); return true`); await s
 await go(`#/case/${cid}/review`)
 await ev(`window.__btn('Nộp bài và khoá sửa').click(); return true`); await sleep(2200)
 await go(`#/case/${cid}/review`)
+
+console.log('\nthe department form')
+// The default export is the department's own paper record. These assertions are
+// about its bones; the pages themselves are compared against the scanned form
+// by eye, which a DOM test cannot do.
+const form = await ev(`
+  const chip = [...document.querySelectorAll('.chip')].find((c) => /mẫu Bộ môn/.test(c.textContent));
+  if (chip && chip.dataset.on !== 'true') { chip.click(); await new Promise((r) => setTimeout(r, 900)); }
+  const pages = [...document.querySelectorAll('.department-page')];
+  const t = document.body.innerText;
+  return {
+    pages: pages.length,
+    isDefault: chip ? chip.dataset.on === 'true' : false,
+    masthead: /PHÒNG KHÁM THỰC HÀNH/.test(t) && /Y HỌC GIA ĐÌNH/.test(t),
+    learnerStrip: t.includes('SV/HV:') && t.includes('MSSV:'),
+    vitalsHeads: [...document.querySelectorAll('.page-1 .dept-table--vitals th')].map((x) => x.textContent.trim()),
+    problemRows: [...document.querySelectorAll('.page-1 table')][1]
+      ? [...document.querySelectorAll('.page-1 table')][1].querySelectorAll('tbody tr').length : 0,
+    examRows: document.querySelectorAll('.dept-exam .dept-exam__row').length,
+    labRows: document.querySelectorAll('.page-3 table tbody tr').length,
+    screeningRows: document.querySelectorAll('.page-4 table tbody tr').length,
+    ticked: document.querySelectorAll('.dept-tick').length,
+    appendixLabelled: /không có trong bệnh án giấy/.test(t),
+  };
+`)
+check('the department form is what the learner exports by default', form.isDefault)
+check('it is the form, four pages of it', form.pages === 4 || form.pages === 5, `${form.pages} pages`)
+check('it carries the department masthead', form.masthead)
+check('the learner is named without disturbing the form', form.learnerStrip)
+check('the vitals row is the seven columns of the form',
+  form.vitalsHeads.join('|') === 'Mạch|Huyết áp|Chiều cao|Cân nặng|BMI|Nhiệt độ|Đường huyết',
+  form.vitalsHeads.join('|'))
+check('every problem row of the form is present, filled or not', form.problemRows === 17, String(form.problemRows))
+check('every organ system of the form is present', form.examRows >= 10, String(form.examRows))
+check('the follow-up investigation table keeps its rows', form.labRows >= 14, String(form.labRows))
+check('the screening schedule keeps its rows', form.screeningRows === 12, String(form.screeningRows))
+check('empty cells are drawn as empty boxes rather than dropped', form.ticked >= 20, String(form.ticked))
+check('anything the paper form does not have is labelled as an addition', form.appendixLabelled)
+
+// The learning report is the other export; the checks below are about it.
+await ev(`
+  const chip = [...document.querySelectorAll('.chip')].find((c) => /Bản học tập/.test(c.textContent));
+  chip.click(); await new Promise((r) => setTimeout(r, 900)); return true;
+`)
 
 console.log('\nprint media')
 await S('Emulation.setEmulatedMedia', { media: 'print' })

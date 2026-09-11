@@ -1,8 +1,10 @@
+import { useState } from 'react'
 import type { CaseRecord, CompletenessSnapshot } from '../types/case'
 import { CaseDocument } from '../export/CaseDocument'
+import { DepartmentForm } from '../export/DepartmentForm'
 import { canShare, downloadJson, printRecord, shareSummary, triggerDownload } from '../export/exportPdf'
 import { missingByTier } from '../completeness/engine'
-import { Badge, Card, Notice } from '../components/Ui'
+import { Badge, Card, Chip, Notice } from '../components/Ui'
 import { useToast } from '../components/Toast'
 import { useProfile } from '../hooks/useProfile'
 import { STATUS, caseStatus, submitBlockers } from '../workflow/status'
@@ -67,6 +69,16 @@ export function ReviewScreen({
     toast(`Đã khoá sửa. Mã bệnh án: ${next.submission.code}`)
   }
 
+  /**
+   * Which document the printer gets.
+   *
+   * The department's form is what a teacher receives, so it is the default.
+   * The learning report is the same data laid out for teaching — kept, because
+   * some of what it shows (self-assessment, the completeness picture) has no
+   * cell on the official form.
+   */
+  const [docMode, setDocMode] = useState<'form' | 'report'>('form')
+
   const onReopen = () => {
     replaceWorkflow(reopen(record))
     toast('Đã mở lại ca. Nhớ nộp lại sau khi bổ sung.')
@@ -79,7 +91,7 @@ export function ReviewScreen({
           <div>
             <h2>Xem trước &amp; xuất</h2>
             <p className="small muted" style={{ margin: '4px 0 0' }}>
-              Bản in dưới đây chính là bản PDF bạn sẽ xuất ra
+              Bản hiện dưới đây chính là bản PDF bạn sẽ xuất ra
               {profile ? `, có tên và mã số của ${profile.fullName}` : ''}.
             </p>
           </div>
@@ -104,8 +116,17 @@ export function ReviewScreen({
           </div>
         )}
 
+        <div className="chips" style={{ marginBottom: 12 }}>
+          <Chip small on={docMode === 'form'} onClick={() => setDocMode('form')}>
+            Bệnh án theo mẫu Bộ môn
+          </Chip>
+          <Chip small on={docMode === 'report'} onClick={() => setDocMode('report')}>
+            Bản học tập ClerkMate
+          </Chip>
+        </div>
+
         <button type="button" className="btn btn--primary btn--block" onClick={onPrint}>
-          🖨 Xuất PDF
+          🖨 Xuất PDF{docMode === 'form' ? ' theo mẫu Bộ môn' : ' bản học tập'}
         </button>
 
         <p className="small" style={{ margin: '12px 0 0' }}>
@@ -221,7 +242,11 @@ export function ReviewScreen({
         )}
       </Card>
 
-      <CaseDocument record={record} profile={profile} />
+      {docMode === 'form' ? (
+        <DepartmentForm record={record} profile={profile} />
+      ) : (
+        <CaseDocument record={record} profile={profile} />
+      )}
     </div>
   )
 }

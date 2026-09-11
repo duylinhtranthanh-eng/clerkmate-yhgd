@@ -333,22 +333,22 @@ t('marking an item bedside changes no arithmetic', () => {
 
 // --------------------------------------------------------- export file names
 console.log('\nexport file names')
-t('the PDF filename never carries the patient', () => {
-  const rec = M.buildKneeOsteoarthritisCase()
-  rec.patient.name = 'Nguyễn Thị Hoa'
-  rec.patient.caseLabel = 'Ca 03'
-  const name = M.buildFileName(rec, { studentId: '21YHGD001', fullName: 'A', level: 'Y5', classGroup: '' })
-  ok(!/Nguyen|Hoa|Thi/i.test(name), `filename leaked the patient: ${name}`)
-  ok(name.includes('21YHGD001'), `filename lost the learner: ${name}`)
-  ok(/Ca-03/i.test(name), `filename lost the case label: ${name}`)
-})
-t('a submitted case is named by its code', () => {
+t('the filename carries the learner, the case and the date', () => {
   const rec = M.buildKneeOsteoarthritisCase()
   rec.patient.name = 'Bà H.'
-  rec.submission.code = 'BGK01-260911-847'
   const name = M.buildFileName(rec, { studentId: '21YHGD001', fullName: 'A', level: 'Y5', classGroup: '' })
-  ok(name.includes('BGK01-260911-847'), name)
-  ok(!/H\./.test(name), name)
+  ok(name.startsWith('ClerkMate_21YHGD001_'), name)
+  ok(/Ba-H/.test(name), `lost the case: ${name}`)
+  ok(/\d{4}-\d{2}-\d{2}$/.test(name), `lost the date: ${name}`)
+})
+t('a case with no name falls back to its code, then its label', () => {
+  const rec = M.buildKneeOsteoarthritisCase()
+  rec.patient.name = ''
+  rec.submission.code = 'BGK01-260911-847'
+  ok(M.buildFileName(rec, null).includes('BGK01-260911-847'), 'code not used')
+  rec.submission.code = ''
+  rec.patient.caseLabel = 'Ca 03'
+  ok(/Ca-03/.test(M.buildFileName(rec, null)), 'label not used')
 })
 t('a nameless case still produces a usable filename', () => {
   const rec = M.createEmptyCase('Y5', '')
