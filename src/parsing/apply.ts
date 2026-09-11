@@ -55,6 +55,9 @@ const appliers: Record<string, Applier> = {
   'pastMedical.add': (d, s) => {
     d.personalHistory.pastMedical.push({
       id: uid('pm'),
+      // A note says what the problem is, not which system it is filed under —
+      // that stays for the learner to choose rather than being guessed.
+      system: '',
       label: s.payload?.label ?? s.value,
       since: s.payload?.since ?? '',
       status: '',

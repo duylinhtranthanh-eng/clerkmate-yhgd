@@ -87,8 +87,8 @@ export function buildKneeOsteoarthritisCase(level: LearnerLevel = 'SDH'): CaseRe
   }
 
   c.personalHistory.pastMedical = [
-    { id: uid('pm'), label: 'Tăng huyết áp', since: '10 năm', status: 'Đang điều trị', note: 'Theo dõi tại trạm y tế' },
-    { id: uid('pm'), label: 'Rối loạn lipid máu', since: '3 năm', status: 'Chưa dùng thuốc', note: '' },
+    { id: uid('pm'), system: 'Tim mạch', label: 'Tăng huyết áp', since: '10 năm', status: 'Đang điều trị', note: 'Theo dõi tại trạm y tế' },
+    { id: uid('pm'), system: 'Nội tiết', label: 'Rối loạn lipid máu', since: '3 năm', status: 'Chưa dùng thuốc', note: '' },
   ]
   c.personalHistory.noAllergies = true
   c.personalHistory.noPastSurgical = true

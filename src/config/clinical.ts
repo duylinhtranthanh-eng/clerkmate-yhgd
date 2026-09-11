@@ -178,6 +178,42 @@ export const SCREEM_DOMAINS: { key: ScreemDomain; label: string; prompt: string 
   { key: 'medical', label: 'Medical — Y tế', prompt: 'Khả năng tiếp cận và sử dụng dịch vụ y tế.' },
 ]
 
+/**
+ * The rows of "Các vấn đề đã và hiện có" on the department's paper form.
+ *
+ * The form lists a body system per row and leaves the diagnosis itself to the
+ * "Phân loại" column, which is why a past problem carries both: the system it
+ * belongs to, and what it actually is.
+ */
+export const PROBLEM_SYSTEMS: string[] = [
+  'Dị ứng',
+  'Thói quen lối sống',
+  'Tim mạch',
+  'Hô hấp',
+  'Tiêu hoá',
+  'Nội tiết',
+  'Cơ – xương - khớp',
+  'Thận - tiết niệu',
+  'Da liễu',
+  'Huyết học',
+  'Mắt',
+  'TMH - RHM',
+  'Thần kinh',
+  'Tâm thần',
+  'Ngoại khoa',
+  'Sản khoa',
+  'Khác',
+]
+
+/** The five the paper form prints as fixed rows of the family-history table. */
+export const FAMILY_HISTORY_CONDITIONS: string[] = [
+  'Đái tháo đường',
+  'Tăng huyết áp',
+  'Rối loạn lipid máu',
+  'Lao',
+  'Ung thư',
+]
+
 export const RED_FLAG_LIBRARY: { group: string; items: string[] }[] = [
   {
     group: 'Toàn thân',

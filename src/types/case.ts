@@ -107,6 +107,8 @@ export interface History {
 
 export interface PastProblem {
   id: string
+  /** The body system it is filed under, matching the paper form's rows. */
+  system: Text
   label: Text
   since: Text
   status: Text

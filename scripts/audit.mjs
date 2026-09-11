@@ -38,6 +38,7 @@ export { applyMany, canApply } from '${process.cwd()}/src/parsing/apply'
 export { buildKneeOsteoarthritisCase } from '${process.cwd()}/src/config/demoCases/kneeOsteoarthritis'
 export { buildElderlyMultimorbidCase } from '${process.cwd()}/src/config/demoCases/elderlyMultimorbid'
 export { RISK_DOMAINS, RISK_FACTOR_DEFS, riskModeFor } from '${process.cwd()}/src/config/risk'
+export { PROBLEM_SYSTEMS, FAMILY_HISTORY_CONDITIONS } from '${process.cwd()}/src/config/clinical'
 export { hasDerivative, isSubmissionSafe, faceDeclaredPresent, faceUnanswered, withExportSafeAttachments } from '${process.cwd()}/src/workflow/privacy'
 export { fallsBand } from '${process.cwd()}/src/config/falls'
 export { SCALES } from '${process.cwd()}/src/config/scales'
@@ -231,6 +232,34 @@ t('both demo cases are near-complete at their own level', () => {
     const snap = M.evaluateCompleteness(build())
     ok(snap.percent >= 95, `demo case only ${snap.percent}%`)
   }
+})
+
+// ------------------------------------------------- the department's paper form
+console.log("\nthe paper form's own rows")
+t('the problem table carries the systems the paper form prints', () => {
+  ok(M.PROBLEM_SYSTEMS.length >= 15, `${M.PROBLEM_SYSTEMS.length} systems`)
+  for (const sys of ['Dị ứng', 'Tim mạch', 'Hô hấp', 'Nội tiết', 'Ngoại khoa', 'Sản khoa', 'Khác']) {
+    ok(M.PROBLEM_SYSTEMS.includes(sys), `missing "${sys}"`)
+  }
+})
+t('the family-history table carries its five fixed conditions', () => {
+  for (const c of ['Đái tháo đường', 'Tăng huyết áp', 'Rối loạn lipid máu', 'Lao', 'Ung thư']) {
+    ok(M.FAMILY_HISTORY_CONDITIONS.includes(c), `missing "${c}"`)
+  }
+})
+t('every demo problem is filed under a system the form has', () => {
+  for (const build of [M.buildKneeOsteoarthritisCase, M.buildElderlyMultimorbidCase]) {
+    const rec = build()
+    for (const m of [...rec.personalHistory.pastMedical, ...rec.personalHistory.pastSurgical]) {
+      ok(M.PROBLEM_SYSTEMS.includes(m.system), `"${m.label}" filed as "${m.system}"`)
+    }
+  }
+})
+t('a problem with no system is still kept, not dropped', () => {
+  const rec = M.createEmptyCase('Y5', 'x')
+  rec.personalHistory.pastMedical.push({ id: 'p', system: '', label: 'Chưa xếp nhóm', since: '', status: '', note: '' })
+  const unfiled = rec.personalHistory.pastMedical.filter((m) => !M.PROBLEM_SYSTEMS.includes(m.system))
+  eq(unfiled.length, 1, 'an unfiled problem disappeared from the record')
 })
 
 // -------------------------------------------------------- bedside minimum

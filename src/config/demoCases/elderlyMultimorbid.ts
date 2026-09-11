@@ -94,14 +94,14 @@ export function buildElderlyMultimorbidCase(level: LearnerLevel = 'SDH'): CaseRe
   }
 
   c.personalHistory.pastMedical = [
-    { id: uid('pm'), label: 'Đái tháo đường típ 2', since: '12 năm', status: 'Đang điều trị', note: 'HbA1c gần nhất 8,4%' },
-    { id: uid('pm'), label: 'Tăng huyết áp', since: '15 năm', status: 'Đang điều trị', note: '' },
-    { id: uid('pm'), label: 'Bệnh thận mạn', since: '3 năm', status: 'Theo dõi', note: 'eGFR 48 mL/phút/1,73 m²' },
-    { id: uid('pm'), label: 'Bệnh phổi tắc nghẽn mạn tính', since: '5 năm', status: 'Ổn định', note: 'Tiền căn hút thuốc 30 gói-năm' },
-    { id: uid('pm'), label: 'Rối loạn lipid máu', since: '8 năm', status: 'Đang điều trị', note: '' },
+    { id: uid('pm'), system: 'Nội tiết', label: 'Đái tháo đường típ 2', since: '12 năm', status: 'Đang điều trị', note: 'HbA1c gần nhất 8,4%' },
+    { id: uid('pm'), system: 'Tim mạch', label: 'Tăng huyết áp', since: '15 năm', status: 'Đang điều trị', note: '' },
+    { id: uid('pm'), system: 'Thận - tiết niệu', label: 'Bệnh thận mạn', since: '3 năm', status: 'Theo dõi', note: 'eGFR 48 mL/phút/1,73 m²' },
+    { id: uid('pm'), system: 'Hô hấp', label: 'Bệnh phổi tắc nghẽn mạn tính', since: '5 năm', status: 'Ổn định', note: 'Tiền căn hút thuốc 30 gói-năm' },
+    { id: uid('pm'), system: 'Nội tiết', label: 'Rối loạn lipid máu', since: '8 năm', status: 'Đang điều trị', note: '' },
   ]
   c.personalHistory.pastSurgical = [
-    { id: uid('ps'), label: 'Mổ thay thủy tinh thể mắt phải', since: '2021', status: '', note: '' },
+    { id: uid('ps'), system: 'Ngoại khoa', label: 'Mổ thay thủy tinh thể mắt phải', since: '2021', status: '', note: '' },
   ]
   c.personalHistory.allergies = [
     { id: uid('al'), agent: 'Captopril', reaction: 'Ho khan nhiều', severity: 'Nhẹ, phải ngưng thuốc' },

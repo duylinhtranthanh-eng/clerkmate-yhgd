@@ -14,7 +14,13 @@ import { GenogramSvg } from '../genogram/GenogramSvg'
 import { resolveFamilyMembers } from '../genogram/resolve'
 import { completedScales, scaleMaxScore } from '../scales/scoring'
 import { fallsBand } from '../config/falls'
-import { APGAR_ITEMS, ATTACHMENT_CATEGORIES, SCREEM_DOMAINS, interpretApgar } from '../config/clinical'
+import {
+  APGAR_ITEMS,
+  ATTACHMENT_CATEGORIES,
+  PROBLEM_SYSTEMS,
+  SCREEM_DOMAINS,
+  interpretApgar,
+} from '../config/clinical'
 import { RISK_DOMAINS } from '../config/risk'
 import { LEVELS } from '../config/levels'
 import { CVD_INPUTS } from '../config/cvd'
@@ -376,15 +382,33 @@ export function CaseDocument({
             {record.personalHistory.pastMedical.length > 0 && (
               <>
                 <p style={{ margin: '0 0 4px', fontWeight: 600 }}>Nội khoa</p>
-                <ul>
-                  {record.personalHistory.pastMedical.map((m) => (
-                    <li key={m.id}>
-                      {m.label}
-                      {m.since && ` — ${m.since}`}
-                      {m.status && ` (${m.status})`}
-                    </li>
-                  ))}
-                </ul>
+                {/*
+                  Filed by body system, the way the paper form's table is. A
+                  problem the learner never filed still prints, under "Chưa
+                  phân loại" — it must not vanish because a dropdown was left
+                  alone.
+                */}
+                <dl>
+                  {[...PROBLEM_SYSTEMS, ''].map((sys) => {
+                    const items = record.personalHistory.pastMedical.filter((m) =>
+                      sys === '' ? !PROBLEM_SYSTEMS.includes(m.system) : m.system === sys,
+                    )
+                    if (items.length === 0) return null
+                    return (
+                      <Row
+                        key={sys || 'unfiled'}
+                        label={sys || 'Chưa phân loại'}
+                        value={items
+                          .map((m) =>
+                            [m.label, m.since && `từ ${m.since}`, m.status, m.note]
+                              .filter(nonEmpty)
+                              .join(' — '),
+                          )
+                          .join('; ')}
+                      />
+                    )
+                  })}
+                </dl>
               </>
             )}
             {record.personalHistory.pastSurgical.length > 0 && (

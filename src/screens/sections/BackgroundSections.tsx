@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
-import { Card, Chip, Field, TextArea, TextInput } from '../../components/Ui'
+import { Card, Chip, Field, Select, TextArea, TextInput } from '../../components/Ui'
+import { FAMILY_HISTORY_CONDITIONS, PROBLEM_SYSTEMS } from '../../config/clinical'
 import { RepeatList } from '../../components/RepeatList'
 import { uid } from '../../utils/id'
 import type { SectionProps } from './types'
@@ -62,6 +63,7 @@ export function PersonalHistorySection({ record, update }: SectionProps) {
             update((d) =>
               void d.personalHistory.pastMedical.push({
                 id: uid('pm'),
+                system: '',
                 label: '',
                 since: '',
                 status: '',
@@ -76,7 +78,15 @@ export function PersonalHistorySection({ record, update }: SectionProps) {
           }
           render={(item, i) => (
             <>
-              <Field label="Chẩn đoán">
+              {/* The paper form files each problem under a body system. */}
+              <Field label="Hệ cơ quan">
+                <Select
+                  value={item.system}
+                  options={PROBLEM_SYSTEMS.map((sys) => ({ value: sys, label: sys }))}
+                  onChange={(e) => update((d) => void (d.personalHistory.pastMedical[i].system = e.target.value))}
+                />
+              </Field>
+              <Field label="Chẩn đoán" help="Ô “Phân loại” trên bệnh án giấy.">
                 <TextInput
                   value={item.label}
                   onChange={(e) => update((d) => void (d.personalHistory.pastMedical[i].label = e.target.value))}
@@ -122,6 +132,7 @@ export function PersonalHistorySection({ record, update }: SectionProps) {
             update((d) =>
               void d.personalHistory.pastSurgical.push({
                 id: uid('ps'),
+                system: '',
                 label: '',
                 since: '',
                 status: '',
@@ -353,6 +364,39 @@ export function FamilyHistorySection({ record, update }: SectionProps) {
         label="Không ghi nhận bệnh lý gia đình"
         onToggle={() => update((d) => void (d.familyHistory.none = !d.familyHistory.none))}
       >
+      {/*
+        The paper form prints five conditions as fixed rows. Tapping one files
+        it as an entry, so the common answers take a tap while anything else is
+        still typed — one list underneath either way.
+      */}
+      <div className="chips" style={{ marginBottom: 12 }}>
+        {FAMILY_HISTORY_CONDITIONS.map((condition) => {
+          const on = fh.entries.some((e) => e.condition === condition)
+          return (
+            <Chip
+              key={condition}
+              small
+              on={on}
+              onClick={() =>
+                update((d) => {
+                  if (on) {
+                    // Only a row nobody has written into is removed by a second
+                    // tap; one carrying "mẹ, chẩn đoán năm 60" is the learner's.
+                    d.familyHistory.entries = d.familyHistory.entries.filter(
+                      (e) => !(e.condition === condition && !e.relatives && !e.note),
+                    )
+                  } else {
+                    d.familyHistory.entries.push({ id: uid('fh'), condition, relatives: '', note: '' })
+                  }
+                })
+              }
+            >
+              {condition}
+            </Chip>
+          )
+        })}
+      </div>
+
       <RepeatList
         items={fh.entries}
         addLabel="Thêm bệnh lý gia đình"
