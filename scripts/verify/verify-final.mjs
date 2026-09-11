@@ -172,28 +172,6 @@ check('first screen names the product and what it produces', /ClerkMate/.test(fi
 check('first screen says it is a learning tool, not an EMR', /công cụ học tập|không phải EMR/i.test(first))
 check('first screen says demo data are fictional', /giả lập/i.test(first))
 check('first screen says this is not a login', /không phải đăng nhập/i.test(first))
-// The level chips are the one decision a learner makes with no information,
-// so what each level will ask for has to be visible while they are choosing.
-const levelChoice = await ev(`
-  const rows = [...document.querySelectorAll('.level-table__row')].map((r) => ({
-    level: r.querySelector('.level-table__level')?.textContent?.replace('bạn chọn', '').trim(),
-    count: Number(r.querySelector('.level-table__pct')?.textContent?.trim()),
-    detail: r.querySelector('.level-table__detail')?.textContent?.trim(),
-    current: r.dataset.current === 'true',
-  }));
-  return rows;
-`)
-check('the first screen shows what each of the four levels will ask for',
-  levelChoice.length === 4 && ['Y2', 'Y5', 'Y6', 'SDH'].every((l, i) => levelChoice[i].level === l),
-  levelChoice.map((r) => `${r.level}:${r.count}`).join(' · '))
-check('the levels genuinely ask for different amounts',
-  levelChoice.every((r) => Number.isFinite(r.count)) && levelChoice[0].count < levelChoice[3].count,
-  `${levelChoice[0].count} → ${levelChoice[3].count}`)
-check('the risk section is described as changing with the level',
-  /danh mục/.test(levelChoice[0].detail) && /tự liệt kê/.test(levelChoice[3].detail),
-  levelChoice[3].detail)
-check('the level being chosen is marked', levelChoice.filter((r) => r.current).length === 1,
-  levelChoice.find((r) => r.current)?.level ?? 'none')
 check('nothing but a name and an id stands between the judge and the app', /Hồ sơ người học/.test(first))
 await shot('01-first-open')
 
@@ -416,6 +394,29 @@ check('the covered region is solid black in the stored image at full resolution'
 // =========================================================== backup round trip
 G('backup and restore')
 await go('#/settings')
+
+// The level chips are the one decision a learner makes with nothing to go on,
+// so what each level expects sits right beside them.
+const levelChoice = await ev(`
+  return [...document.querySelectorAll('.level-table__row')].map((r) => ({
+    level: r.querySelector('.level-table__level')?.textContent?.replace('bạn chọn', '').trim(),
+    expects: r.querySelector('.level-table__detail')?.textContent?.trim() ?? '',
+    current: r.dataset.current === 'true',
+  }));
+`)
+check('settings says what each of the four levels expects, beside the chips',
+  levelChoice.length === 4 && ['Y2', 'Y5', 'Y6', 'SDH'].every((l, i) => levelChoice[i].level === l),
+  levelChoice.map((r) => r.level).join(' · '))
+check('each level is described by what the learner must do, not by a count',
+  levelChoice.every((r) => r.expects.length > 30 && !/\d+\s*mục/.test(r.expects)),
+  levelChoice[0]?.expects?.slice(0, 60) ?? 'none')
+check('the levels describe different work, each adding to the one before',
+  new Set(levelChoice.map((r) => r.expects)).size === 4 &&
+    levelChoice.slice(1).every((r) => /^Thêm/.test(r.expects)),
+  levelChoice[3]?.expects?.slice(0, 60) ?? 'none')
+check('the level in use is marked', levelChoice.filter((r) => r.current).length === 1,
+  levelChoice.find((r) => r.current)?.level ?? 'none')
+
 await reinstall()
 await ev(`window.__caught = []; window.__btn('Sao lưu ra tệp').click(); return true`)
 await sleep(3500)

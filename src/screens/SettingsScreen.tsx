@@ -103,11 +103,28 @@ export function SettingsScreen({ back }: { back: () => void }) {
               ))}
             </div>
           </Field>
-          {profile && (
-            <p className="small muted" style={{ margin: '4px 0 0' }}>
-              {LEVELS[profile.level].description}
-            </p>
-          )}
+
+          {/*
+            What each level is expected to be able to do, so the choice above is
+            made against something rather than against a label. Each level says
+            what it adds to the one before it, because that is how they are
+            built — a mức never drops what the mức below it asks for.
+          */}
+          <div className="level-table" style={{ marginTop: 4 }}>
+            {LEVEL_ORDER.map((l) => (
+              <div
+                key={l}
+                className="level-table__row"
+                data-current={profile?.level === l ? 'true' : 'false'}
+              >
+                <div className="level-table__level">
+                  {l}
+                  {profile?.level === l && <span className="level-table__you">bạn chọn</span>}
+                </div>
+                <div className="level-table__detail small">{LEVELS[l].expects}</div>
+              </div>
+            ))}
+          </div>
         </Card>
 
         <Card

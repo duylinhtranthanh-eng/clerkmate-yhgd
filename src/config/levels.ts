@@ -12,6 +12,14 @@ export interface LevelDef {
   id: LearnerLevel
   label: string
   description: string
+  /**
+   * What a learner at this level is expected to be able to do.
+   *
+   * Written from the level's own `mandatory` list, so it says what the app will
+   * actually ask for. A count would be a worse answer to the same question:
+   * "nineteen items" tells a fifth-year nothing, "hỏi được cờ đỏ và ICE" does.
+   */
+  expects: string
   extends: LearnerLevel | null
   mandatory: string[]
   recommended: string[]
@@ -30,6 +38,8 @@ export const LEVELS: Record<LearnerLevel, LevelDef> = {
     id: 'Y2',
     label: 'Y2 — Tiền lâm sàng',
     description: 'Tập trung vào kỹ năng hỏi bệnh cơ bản và đo sinh hiệu.',
+    expects:
+      'Hỏi được lý do đến khám, kể lại được diễn tiến bệnh sử, đo và ghi sinh hiệu, khám cơ bản.',
     extends: null,
     mandatory: [
       'patient.identity',
@@ -53,6 +63,8 @@ export const LEVELS: Record<LearnerLevel, LevelDef> = {
     id: 'Y5',
     label: 'Y5 — Lâm sàng YHGĐ',
     description: 'Bệnh án đầy đủ: cờ đỏ, ICE, tiền căn, cận lâm sàng, chẩn đoán, xử trí.',
+    expects:
+      'Thêm: hỏi cờ đỏ và ICE, khai thác tiền căn và lối sống, đề nghị cận lâm sàng, đặt được chẩn đoán chính và kế hoạch xử trí.',
     extends: 'Y2',
     mandatory: [
       'attachments.privacy',
@@ -98,6 +110,8 @@ export const LEVELS: Record<LearnerLevel, LevelDef> = {
     id: 'Y6',
     label: 'Y6 — Thực hành tổng hợp',
     description: 'Thêm đánh giá nguy cơ, chẩn đoán phân biệt, dự phòng và theo dõi.',
+    expects:
+      'Thêm: rà soát yếu tố nguy cơ và tầm soát, chẩn đoán phân biệt có biện luận, kế hoạch dự phòng, chuyển tuyến và theo dõi.',
     extends: 'Y5',
     mandatory: [
       'attachments.privacy',
@@ -144,6 +158,8 @@ export const LEVELS: Record<LearnerLevel, LevelDef> = {
     id: 'SDH',
     label: 'SDH — Sau đại học',
     description: 'Bệnh án YHGĐ chuyên sâu: chu kỳ gia đình, APGAR, SCREEM, phả hệ, chăm sóc liên tục.',
+    expects:
+      'Thêm: đánh giá gia đình đầy đủ — kiểu gia đình, chu kỳ sống, APGAR, SCREEM, phả hệ — và chăm sóc liên tục.',
     extends: 'Y6',
     mandatory: [
       'inv.impact',

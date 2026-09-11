@@ -112,19 +112,14 @@ export function HomeScreen({ navigate }: { navigate: (r: Route) => void }) {
             Ghi chú nhanh tại phòng khám → bệnh án có cấu trúc → xuất PDF nộp giảng viên. Ca mẫu là
             bệnh nhân giả lập.
           </p>
-          <div className="btn-row" style={{ marginTop: 14 }}>
-            <button
-              type="button"
-              className="btn btn--primary"
-              style={{ flex: 1 }}
-              onClick={() => setPickingDemo(true)}
-            >
-              ▶ Dùng thử ca mẫu
-            </button>
-            <button type="button" className="btn btn--secondary" onClick={() => setCreating(true)}>
-              ＋ Ca mới
-            </button>
-          </div>
+          <button
+            type="button"
+            className="btn btn--primary btn--block"
+            style={{ marginTop: 14 }}
+            onClick={() => setCreating(true)}
+          >
+            ＋ Ca lâm sàng mới
+          </button>
         </Card>
 
         <Card className="card--flat">
@@ -146,9 +141,9 @@ export function HomeScreen({ navigate }: { navigate: (r: Route) => void }) {
             <EmptyState
               icon="🩺"
               title="Chưa có ca nào"
-              body="Bấm “Dùng thử ca mẫu” ở trên để mở một ca giả lập đã điền đầy đủ, hoặc tạo ca mới và bắt đầu bằng một ghi chú nhanh."
+              body="Tạo ca mới và bắt đầu bằng một ghi chú nhanh, hoặc mở một ca giả lập đã điền sẵn để xem bệnh án hoàn chỉnh trông ra sao."
               action={
-                <button type="button" className="btn btn--secondary" onClick={() => setPickingDemo(true)}>
+                <button type="button" className="btn btn--primary" onClick={() => setPickingDemo(true)}>
                   ▶ Dùng thử ca mẫu
                 </button>
               }
