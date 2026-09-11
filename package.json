@@ -13,7 +13,8 @@
     "test": "node scripts/audit.mjs",
     "verify:app": "node scripts/verify/verify-final.mjs",
     "verify:print": "node scripts/verify/verify-print.mjs",
-    "preview:pages": "vite preview --port 4191 --base /clerkmate-yhgd/ --strictPort"
+    "preview:pages": "vite preview --port 4191 --base /clerkmate-yhgd/ --strictPort",
+    "verify:profiles": "node scripts/verify/verify-profiles.mjs"
   },
   "dependencies": {
     "react": "^19.2.0",

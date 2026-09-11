@@ -23,10 +23,15 @@ function emptyScreem(): Screem {
   }
 }
 
-export function createEmptyCase(level: LearnerLevel = 'Y5', caseLabel = ''): CaseRecord {
+export function createEmptyCase(
+  level: LearnerLevel = 'Y5',
+  caseLabel = '',
+  ownerProfileId = '',
+): CaseRecord {
   const now = new Date().toISOString()
   return {
     id: uid('case'),
+    ownerProfileId,
     schemaVersion: SCHEMA_VERSION,
     createdAt: now,
     updatedAt: now,

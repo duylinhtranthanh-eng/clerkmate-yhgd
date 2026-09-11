@@ -7,6 +7,7 @@
 import type { Attachment, CaseRecord, CaseSummary } from '../types/case'
 import type { LearnerProfile } from '../types/profile'
 import { migrateCase } from '../types/factory'
+import { uid } from '../utils/id'
 import { evaluateCompleteness } from '../completeness/engine'
 import { caseStatus } from '../workflow/status'
 import { unreadReviews } from '../workflow/submission'
@@ -30,7 +31,12 @@ function toSummary(c: CaseRecord): CaseSummary {
 }
 
 export async function listCases(): Promise<CaseSummary[]> {
-  const rows = await idb.all<CaseRecord>(STORE_CASES)
+  await ensureProfiles()
+  const active = await getActiveProfileId()
+  const all = await idb.all<CaseRecord>(STORE_CASES)
+  // An unowned case belongs to whoever is looking: better that one learner sees
+  // a stray record than that it disappears from every list on the device.
+  const rows = active ? all.filter((r) => !r.ownerProfileId || r.ownerProfileId === active) : all
   return rows
     .map((r) => toSummary(migrateCase(r)))
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
@@ -119,11 +125,65 @@ export async function setPref<T>(key: string, value: T): Promise<void> {
 
 // --- learner profile -------------------------------------------------------
 
-const PROFILE_KEY = 'learnerProfile'
+/** Where the single profile used to live. Read once, at migration. */
+const LEGACY_PROFILE_KEY = 'learnerProfile'
+const PROFILES_KEY = 'learnerProfiles'
+const ACTIVE_KEY = 'activeProfileId'
+
+export async function listProfiles(): Promise<LearnerProfile[]> {
+  return (await idb.get<LearnerProfile[] | undefined>(STORE_META, PROFILES_KEY)) ?? []
+}
+
+/**
+ * Brings a device that has only ever known one learner up to the multi-profile
+ * shape, without touching a single case's content.
+ *
+ * Idempotent by construction: it does nothing once a profile list exists, and
+ * the only thing it ever writes to a case is an owner it did not have. Cases,
+ * their ids, their attachments and their completeness are untouched — losing a
+ * learner's records to a migration would be far worse than never running it.
+ */
+export async function ensureProfiles(): Promise<LearnerProfile[]> {
+  let profiles = await listProfiles()
+
+  if (profiles.length === 0) {
+    const legacy = await idb.get<LearnerProfile | undefined>(STORE_META, LEGACY_PROFILE_KEY)
+    if (!legacy) return []
+    const migrated: LearnerProfile = { ...legacy, id: legacy.id || uid('profile') }
+    profiles = [migrated]
+    await idb.put(STORE_META, profiles, PROFILES_KEY)
+    await idb.put(STORE_META, migrated.id, ACTIVE_KEY)
+  }
+
+  const active = (await idb.get<string | undefined>(STORE_META, ACTIVE_KEY)) || profiles[0]?.id
+  if (active && active !== (await idb.get<string | undefined>(STORE_META, ACTIVE_KEY))) {
+    await idb.put(STORE_META, active, ACTIVE_KEY)
+  }
+
+  // Adopt any case that predates ownership. A case with no owner would
+  // otherwise be visible to nobody once the list is filtered.
+  const rows = await idb.all<CaseRecord>(STORE_CASES)
+  for (const row of rows) {
+    if (!row.ownerProfileId && active) {
+      await idb.put(STORE_CASES, { ...row, ownerProfileId: active })
+    }
+  }
+  return profiles
+}
+
+export async function getActiveProfileId(): Promise<string> {
+  return (await idb.get<string | undefined>(STORE_META, ACTIVE_KEY)) ?? ''
+}
+
+export async function setActiveProfile(id: string): Promise<void> {
+  await idb.put(STORE_META, id, ACTIVE_KEY)
+}
 
 export async function getProfile(): Promise<LearnerProfile | null> {
-  const p = await idb.get<LearnerProfile | undefined>(STORE_META, PROFILE_KEY)
-  return p ?? null
+  const profiles = await ensureProfiles()
+  if (profiles.length === 0) return null
+  const active = await getActiveProfileId()
+  return profiles.find((x) => x.id === active) ?? profiles[0]
 }
 
 export async function saveProfile(profile: LearnerProfile): Promise<LearnerProfile> {
@@ -139,8 +199,21 @@ export async function saveProfile(profile: LearnerProfile): Promise<LearnerProfi
         : [{ level: profile.level, at: new Date().toISOString() }],
     updatedAt: new Date().toISOString(),
   }
-  await idb.put(STORE_META, next, PROFILE_KEY)
+  const profiles = await listProfiles()
+  const i = profiles.findIndex((x) => x.id === next.id)
+  await idb.put(STORE_META, i >= 0 ? profiles.map((x, n) => (n === i ? next : x)) : [...profiles, next], PROFILES_KEY)
+  await idb.put(STORE_META, next.id, ACTIVE_KEY)
   return next
+}
+
+/** Every profile on this device, with how many records each one holds. */
+export async function profilesWithCounts(): Promise<{ profile: LearnerProfile; cases: number }[]> {
+  const profiles = await ensureProfiles()
+  const rows = await idb.all<CaseRecord>(STORE_CASES)
+  return profiles.map((profile) => ({
+    profile,
+    cases: rows.filter((r) => r.ownerProfileId === profile.id).length,
+  }))
 }
 
 // --- backup / restore (local file, still no server) -------------------------

@@ -7,6 +7,7 @@
  */
 
 import type { LearnerLevel } from './case'
+import { uid } from '../utils/id'
 
 export interface LevelChange {
   level: LearnerLevel
@@ -14,6 +15,14 @@ export interface LevelChange {
 }
 
 export interface LearnerProfile {
+  /**
+   * Local identity for this profile.
+   *
+   * Several learners may share one phone or one library browser, and their
+   * records must not mix. This separates them; it does not authenticate them —
+   * anyone holding the device can switch profiles, and the app says so.
+   */
+  id: string
   fullName: string
   studentId: string
   level: LearnerLevel
@@ -43,6 +52,7 @@ export function createProfile(
 ): LearnerProfile {
   const now = new Date().toISOString()
   return {
+    id: uid('profile'),
     fullName,
     studentId,
     level,

@@ -270,10 +270,17 @@ const compl = await ev(`
 `)
 check('percentage and all three tiers are shown', compl.pct > 0 && compl.tiers?.length === 3, JSON.stringify(compl))
 const levelPreview = {}
+// Profiles are a list with an active one; there is no single stored profile.
 const profileLevel = await ev(`
   const db = await new Promise((r) => { const q = indexedDB.open('clerkmate'); q.onsuccess = () => r(q.result) });
-  return new Promise((r) => { const t = db.transaction('meta').objectStore('meta').get('learnerProfile');
-    t.onsuccess = () => r(t.result?.level ?? null) });
+  const read = (key) => new Promise((r) => {
+    const t = db.transaction('meta').objectStore('meta').get(key);
+    t.onsuccess = () => r(t.result);
+  });
+  const profiles = (await read('learnerProfiles')) ?? [];
+  const activeId = await read('activeProfileId');
+  const active = profiles.find((p) => p.id === activeId) ?? profiles[0];
+  return active?.level ?? null;
 `)
 
 for (const level of ['Y2', 'Y5', 'Y6', 'SDH']) {

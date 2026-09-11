@@ -2,7 +2,14 @@ import { useState } from 'react'
 import type { CaseRecord, CompletenessSnapshot } from '../types/case'
 import { CaseDocument } from '../export/CaseDocument'
 import { DepartmentForm } from '../export/DepartmentForm'
-import { canShare, downloadJson, printRecord, shareSummary, triggerDownload } from '../export/exportPdf'
+import {
+  canShare,
+  downloadJson,
+  openEmailDraft,
+  printRecord,
+  shareSummary,
+  triggerDownload,
+} from '../export/exportPdf'
 import { missingByTier } from '../completeness/engine'
 import { Badge, Card, Chip, Notice } from '../components/Ui'
 import { useToast } from '../components/Toast'
@@ -133,6 +140,24 @@ export function ReviewScreen({
           Trong hộp thoại in, chọn <strong>Lưu thành PDF</strong> (Save as PDF). Trên iPhone: nút Chia sẻ →
           Lưu vào Tệp. Sau đó <strong>gửi tệp PDF cho giảng viên</strong> qua kênh lớp bạn đang dùng —
           email, Zalo, LMS hay Drive. ClerkMate không cần giảng viên cài gì cả.
+        </p>
+
+        {/*
+          Deliberately not called "gửi PDF qua email". A mailto: link cannot
+          attach a local file in any browser, so the button writes the message
+          and says plainly that the learner has to attach the PDF themselves.
+        */}
+        <button
+          type="button"
+          className="btn btn--secondary btn--block"
+          style={{ marginTop: 10 }}
+          onClick={() => openEmailDraft(record, profile)}
+        >
+          ✉️ Mở email đã soạn sẵn lời nhắn
+        </button>
+        <p className="tiny muted" style={{ margin: '6px 0 0' }}>
+          Email mở ra đã có sẵn tiêu đề và lời nhắn. <strong>Tệp PDF bạn phải tự đính kèm</strong> — trình
+          duyệt không đính kèm tệp vào email được.
         </p>
 
         {canShare() && (

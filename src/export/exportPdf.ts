@@ -64,6 +64,40 @@ export function triggerDownload(blob: Blob, filename: string): void {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
+/**
+ * Opens the learner's mail client with the subject and body written.
+ *
+ * Not "send the PDF by email": a `mailto:` link cannot attach a local file, in
+ * any browser, and saying otherwise would have learners send empty mails to
+ * their teacher. The PDF is saved by the print dialog and the body says so, in
+ * the learner's own voice, so they know to attach it themselves.
+ */
+export function openEmailDraft(record: CaseRecord, profile: LearnerProfile | null = null): void {
+  const learner = profile?.studentId || 'chưa có mã số'
+  const caseRef = record.submission.code || record.patient.caseLabel || record.patient.name || 'bệnh án'
+  const subject = `Bệnh án học tập ClerkMate — ${learner} — ${caseRef}`
+  const body = [
+    'Em gửi Thầy/Cô bệnh án học tập được xuất từ ClerkMate.',
+    '',
+    `Tệp PDF đã được tải về thiết bị (${buildFileName(record, profile)}.pdf).`,
+    'Vui lòng đính kèm tệp vào email này nếu chưa xuất hiện tự động — trình duyệt không tự đính kèm được.',
+  ].join('\n')
+  window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+}
+
+/**
+ * Whether the device can share an actual file.
+ *
+ * Always false today, and deliberately so: the PDF is produced by the browser's
+ * own print pipeline, which hands the file to the operating system and never to
+ * the page, so there is no Blob to pass to `navigator.share`. Until the record
+ * is rendered by a PDF writer of our own, offering "share the PDF" would be a
+ * promise the app cannot keep.
+ */
+export function canShareFile(): boolean {
+  return false
+}
+
 export function canShare(): boolean {
   return typeof navigator !== 'undefined' && typeof navigator.share === 'function'
 }

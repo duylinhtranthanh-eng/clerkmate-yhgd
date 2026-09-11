@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { CaseSummary, LearnerLevel } from '../types/case'
-import { deleteCase, listCases, saveCase } from '../db/repository'
+import type { LearnerProfile } from '../types/profile'
+import { createProfile } from '../types/profile'
+import { deleteCase, listCases, profilesWithCounts, saveCase } from '../db/repository'
 import { createEmptyCase } from '../types/factory'
 import { STATUS } from '../workflow/status'
-import { LEVELS } from '../config/levels'
+import { LEVELS, LEVEL_ORDER } from '../config/levels'
 import { SEX_LABEL, relativeTime } from '../utils/format'
 import { useProfile } from '../hooks/useProfile'
-import { Badge, Card, EmptyState, Field, Notice, Progress, TextInput } from '../components/Ui'
+import { Badge, Card, Chip, EmptyState, Field, Notice, Progress, TextInput } from '../components/Ui'
 import { Sheet } from '../components/Sheet'
 import { TopBar } from '../components/TopBar'
 import { useToast } from '../components/Toast'
@@ -20,7 +22,10 @@ export function HomeScreen({ navigate }: { navigate: (r: Route) => void }) {
   const [creating, setCreating] = useState(false)
   const [menuFor, setMenuFor] = useState<CaseSummary | null>(null)
   const [pickingDemo, setPickingDemo] = useState(false)
-  const { profile } = useProfile()
+  const { profile, save: saveProfile, switchTo } = useProfile()
+  const [switching, setSwitching] = useState(false)
+  const [roster, setRoster] = useState<{ profile: LearnerProfile; cases: number }[]>([])
+  const [adding, setAdding] = useState(false)
   const level: LearnerLevel = profile?.level ?? 'Y5'
   const toast = useToast()
 
@@ -37,7 +42,11 @@ export function HomeScreen({ navigate }: { navigate: (r: Route) => void }) {
   }, [refresh])
 
   const onCreate = async (label: string) => {
-    const next = createEmptyCase(level, label || `Ca ${String(cases.length + 1).padStart(2, '0')}`)
+    const next = createEmptyCase(
+      level,
+      label || `Ca ${String(cases.length + 1).padStart(2, '0')}`,
+      profile?.id ?? '',
+    )
     const saved = await saveCase(next)
     if (!saved) return
     setCreating(false)
@@ -229,10 +238,82 @@ export function HomeScreen({ navigate }: { navigate: (r: Route) => void }) {
         )}
 
 
+        <Card title="Hồ sơ người học" className="card--flat">
+          <p className="small muted" style={{ marginTop: -4 }}>
+            Hồ sơ trên thiết bị này. Mỗi hồ sơ có danh sách bệnh án riêng.
+          </p>
+          <button
+            type="button"
+            className="btn btn--secondary btn--block"
+            onClick={() => {
+              void profilesWithCounts().then(setRoster)
+              setSwitching(true)
+            }}
+          >
+            👥 Đổi hồ sơ người học
+          </button>
+          <p className="tiny muted" style={{ margin: '8px 0 0' }}>
+            Các hồ sơ trên thiết bị này giúp tách bệnh án giữa nhiều người học nhưng không thay thế cơ chế
+            đăng nhập hoặc bảo mật thiết bị.
+          </p>
+        </Card>
+
         <Notice tone="info">
           Dữ liệu chỉ nằm trên thiết bị này. Nên sao lưu trong phần Cài đặt trước khi trình diễn.
         </Notice>
       </div>
+
+      <Sheet open={switching} onClose={() => setSwitching(false)} title="Hồ sơ trên thiết bị này">
+        <div className="stack">
+          {roster.map(({ profile: pr, cases: n }) => (
+            <button
+              key={pr.id}
+              type="button"
+              className="list__item"
+              style={{ borderRadius: 'var(--r-md)', border: '1px solid var(--line)' }}
+              onClick={() => {
+                void switchTo(pr.id).then(() => {
+                  setSwitching(false)
+                  refresh()
+                  toast(`Đang dùng hồ sơ ${pr.fullName}.`)
+                })
+              }}
+            >
+              <span className="list__icon" aria-hidden="true">
+                {pr.id === profile?.id ? '●' : '○'}
+              </span>
+              <span className="grow">
+                <span className="title">
+                  {pr.fullName} — {pr.level}
+                </span>
+                <span className="meta">
+                  {pr.studentId}
+                  {pr.classGroup ? ` · ${pr.classGroup}` : ''} · {n} bệnh án
+                </span>
+              </span>
+            </button>
+          ))}
+          <button type="button" className="btn btn--secondary btn--block" onClick={() => setAdding(true)}>
+            ＋ Thêm hồ sơ người học
+          </button>
+        </div>
+        <Notice tone="info">
+          Dữ liệu ClerkMate được lưu cục bộ trên thiết bị này. Chuyển hồ sơ không xóa dữ liệu của hồ sơ khác.
+        </Notice>
+      </Sheet>
+
+      <Sheet open={adding} onClose={() => setAdding(false)} title="Thêm hồ sơ người học">
+        <NewProfileForm
+          onCreate={(p) => {
+            void saveProfile(p).then(() => {
+              setAdding(false)
+              setSwitching(false)
+              refresh()
+              toast(`Đã tạo hồ sơ ${p.fullName}.`)
+            })
+          }}
+        />
+      </Sheet>
 
       <Sheet open={pickingDemo} onClose={() => setPickingDemo(false)} title="Chọn ca mẫu">
         <p className="small muted" style={{ marginTop: -6 }}>
@@ -357,5 +438,55 @@ function NewCaseSheet({
         Tạo và bắt đầu ghi chú
       </button>
     </Sheet>
+  )
+}
+
+/**
+ * Adding a second learner to the same device.
+ *
+ * Asks for exactly what the first screen asks for, and nothing more: this is a
+ * label on a set of records, not an account, so there is no password to choose
+ * and nothing to verify.
+ */
+function NewProfileForm({ onCreate }: { onCreate: (p: LearnerProfile) => void }) {
+  const [fullName, setFullName] = useState('')
+  const [studentId, setStudentId] = useState('')
+  const [level, setLevel] = useState<LearnerLevel>('Y5')
+  const [classGroup, setClassGroup] = useState('')
+  const ready = fullName.trim().length > 0 && studentId.trim().length > 0
+
+  return (
+    <div className="stack">
+      <Field label="Họ và tên">
+        <TextInput value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Nguyễn Văn A" />
+      </Field>
+      <Field label="Mã số sinh viên / học viên">
+        <TextInput value={studentId} onChange={(e) => setStudentId(e.target.value)} placeholder="21YHGD002" />
+      </Field>
+      <Field label="Năm / trình độ">
+        <div className="chips">
+          {LEVEL_ORDER.map((l) => (
+            <Chip key={l} on={level === l} onClick={() => setLevel(l)}>
+              {l}
+            </Chip>
+          ))}
+        </div>
+      </Field>
+      <Field label="Lớp / nhóm">
+        <TextInput
+          value={classGroup}
+          onChange={(e) => setClassGroup(e.target.value)}
+          placeholder="Không bắt buộc"
+        />
+      </Field>
+      <button
+        type="button"
+        className="btn btn--primary btn--block"
+        disabled={!ready}
+        onClick={() => onCreate(createProfile(fullName.trim(), studentId.trim(), level, classGroup.trim()))}
+      >
+        Tạo hồ sơ
+      </button>
+    </div>
   )
 }

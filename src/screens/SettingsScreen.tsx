@@ -14,6 +14,7 @@ import { AI_ENDPOINT } from '../parsing/aiStructurer'
 export function SettingsScreen({ back }: { back: () => void }) {
   const { profile, save } = useProfile()
   const [inspect, setInspect] = useState<LearnerLevel>(profile?.level ?? 'Y5')
+  const [pendingLevel, setPendingLevel] = useState<LearnerLevel | null>(null)
   const [storage, setStorage] = useState<string>('')
   const ai = useAiStructuring()
   const toast = useToast()
@@ -94,15 +95,43 @@ export function SettingsScreen({ back }: { back: () => void }) {
               placeholder="Không bắt buộc"
             />
           </Field>
-          <Field label="Năm / trình độ" help="Ca lâm sàng mới sẽ được chấm theo mức này.">
+          {/*
+            Changing this is asked about rather than done, because a learner who
+            taps Y6 while browsing must not find their Y5 cases silently
+            re-marked. The level a case was written at is part of what it
+            records, so it stays with the case.
+          */}
+          <Field label="Mức đào tạo mặc định" help="Dùng cho các bệnh án tạo sau thời điểm này.">
             <div className="chips">
               {LEVEL_ORDER.map((l) => (
-                <Chip key={l} on={profile?.level === l} onClick={() => patchProfile({ level: l })}>
+                <Chip key={l} on={profile?.level === l} onClick={() => l !== profile?.level && setPendingLevel(l)}>
                   {l}
                 </Chip>
               ))}
             </div>
           </Field>
+          {pendingLevel && (
+            <Notice tone="warn">
+              Đổi mức mặc định sang <strong>{pendingLevel}</strong>? Mức mới sẽ được dùng mặc định cho các
+              bệnh án tạo sau thời điểm này. <strong>Bệnh án cũ giữ nguyên mức đã chọn.</strong>
+              <div className="btn-row" style={{ marginTop: 10 }}>
+                <button
+                  type="button"
+                  className="btn btn--primary btn--sm"
+                  onClick={() => {
+                    patchProfile({ level: pendingLevel })
+                    setPendingLevel(null)
+                    toast(`Mức mặc định giờ là ${pendingLevel}.`)
+                  }}
+                >
+                  Đổi sang {pendingLevel}
+                </button>
+                <button type="button" className="btn btn--secondary btn--sm" onClick={() => setPendingLevel(null)}>
+                  Giữ nguyên
+                </button>
+              </div>
+            </Notice>
+          )}
 
           {/*
             What each level is expected to be able to do, so the choice above is

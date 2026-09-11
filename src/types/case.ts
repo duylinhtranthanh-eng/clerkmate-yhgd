@@ -716,6 +716,8 @@ export interface CompletenessSnapshot {
 
 export interface CaseRecord {
   id: string
+  /** The local learner profile this record belongs to. */
+  ownerProfileId: string
   schemaVersion: number
   createdAt: string
   updatedAt: string
