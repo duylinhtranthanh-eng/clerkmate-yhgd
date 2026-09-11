@@ -1,9 +1,29 @@
 # ClerkMate — Final Product Implementation Fact Sheet
 
-**Verified:** 10 September 2026.
-**Method:** every line below was checked against the code in `src/`, and where marked *verified* it
-was also observed running — 55 rule checks (`npm test`), 100 end-to-end browser checks and 27 print
-checks, all in a real Chrome against the production build served from a repository subpath.
+> ## ⚠️ Read this first
+>
+> **The body of this document was verified on 10 September 2026 and the product changed
+> substantially on 11 September.** Sections 1–4 below have been corrected; **everything after §4 still
+> describes the 10 September build** and must be re-checked before being quoted.
+>
+> What changed on 11 September, none of which the body reflects:
+>
+> - The PDF is now **the department's own four-page paper form**, filled in. The old twenty-one
+>   section report is kept as a second export.
+> - **The grading interface was removed.** No `#/cham-bai`, no faculty screen. The eight processing
+>   states and the submission lock remain.
+> - **Attachments must produce a sanitized derivative** before anything can be exported; clinical
+>   photos must answer whether a face is visible, and a declared face blocks the image.
+> - **Several local learner profiles** can share one device, each with its own case list.
+> - The level map moved: **APGAR and SCREEM are required from Y2, the genogram from Y5**, and
+>   management and follow-up are what SDH adds. Mandatory counts are now Y2 8 · Y5 22 · Y6 34 · SDH 54.
+> - Test counts are now **77 / 104 / 49 / 14**, not 55 / 100 / 27.
+>
+> For numbers that are current, use `FINAL_SUBMISSION_VERIFICATION.md`, verified 11 September.
+
+**Verified:** body 10 September 2026; header and §1–§4 corrected 11 September 2026.
+**Method:** every line was checked against the code in `src/`, and where marked *verified* it was also
+observed running in a real Chrome against the production build served from a repository subpath.
 
 **Classification:** IMPLEMENTED · PARTIAL · DEMO/SIMULATED · NOT IMPLEMENTED.
 Nothing is marked IMPLEMENTED on the strength of reading the source alone.
@@ -24,19 +44,21 @@ trainees. Not a hospital EMR.
 | Item | Value |
 |---|---|
 | `package.json` version | `0.1.0` (private) |
-| Git commit | **none — the project is not yet under version control.** No repository has been created and nothing has been pushed. See §33 |
-| Source size | 75 TypeScript/TSX files, ~17,300 lines in `src/`, plus one `.mjs` serverless function |
-| Build output | 8 static files, 600 KB; JS 556 KB raw / ~166 KB gzip |
+| Git commit | `108105a` (11 September 2026). The repository exists and is pushed: https://github.com/duylinhtranthanh-eng/clerkmate-yhgd |
+| Source size | 77 TypeScript/TSX files, ~19,000 lines in `src/`, plus one `.mjs` serverless function |
+| Build output | 9 static files; JS 577 KB raw |
 
 ## 3. Public demo URL
 
-**Not yet live on GitHub Pages.** The deployment workflow and the Vite configuration are in place
-and verified locally against the Pages hosting shape, but the repository does not exist yet, so
-there is no URL. Once created it will be:
+**Live on GitHub Pages:**
 
 ```
-https://<username>.github.io/<repo>/
+https://duylinhtranthanh-eng.github.io/clerkmate-yhgd/
 ```
+
+Deployed by GitHub Actions on push to `main` (`npm ci → npm test → build → deploy`), so a failing
+audit keeps the previous good build rather than publishing a broken one. The live bundle was compared
+against the local build on 11 September and is identical.
 
 The repository name is **not hard-coded anywhere** — Vite uses a relative base (`base: './'`), so
 the same artifact works at a domain root or under any subpath.
