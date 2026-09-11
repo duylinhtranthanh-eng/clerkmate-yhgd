@@ -38,6 +38,7 @@ export { applyMany, canApply } from '${process.cwd()}/src/parsing/apply'
 export { buildKneeOsteoarthritisCase } from '${process.cwd()}/src/config/demoCases/kneeOsteoarthritis'
 export { buildElderlyMultimorbidCase } from '${process.cwd()}/src/config/demoCases/elderlyMultimorbid'
 export { RISK_DOMAINS, RISK_FACTOR_DEFS, riskModeFor } from '${process.cwd()}/src/config/risk'
+export { buildFileName } from '${process.cwd()}/src/export/exportPdf'
 export { PROBLEM_SYSTEMS, FAMILY_HISTORY_CONDITIONS } from '${process.cwd()}/src/config/clinical'
 export { hasDerivative, isSubmissionSafe, faceDeclaredPresent, faceUnanswered, withExportSafeAttachments } from '${process.cwd()}/src/workflow/privacy'
 export { fallsBand } from '${process.cwd()}/src/config/falls'
@@ -328,6 +329,32 @@ t('marking an item bedside changes no arithmetic', () => {
     'a bedside item landed outside the three tiers')
   eq(snap.mandatoryTotal + snap.recommendedTotal + snap.optionalTotal, snap.items.length,
     'the tier totals stopped adding up to the item count')
+})
+
+// --------------------------------------------------------- export file names
+console.log('\nexport file names')
+t('the PDF filename never carries the patient', () => {
+  const rec = M.buildKneeOsteoarthritisCase()
+  rec.patient.name = 'Nguyễn Thị Hoa'
+  rec.patient.caseLabel = 'Ca 03'
+  const name = M.buildFileName(rec, { studentId: '21YHGD001', fullName: 'A', level: 'Y5', classGroup: '' })
+  ok(!/Nguyen|Hoa|Thi/i.test(name), `filename leaked the patient: ${name}`)
+  ok(name.includes('21YHGD001'), `filename lost the learner: ${name}`)
+  ok(/Ca-03/i.test(name), `filename lost the case label: ${name}`)
+})
+t('a submitted case is named by its code', () => {
+  const rec = M.buildKneeOsteoarthritisCase()
+  rec.patient.name = 'Bà H.'
+  rec.submission.code = 'BGK01-260911-847'
+  const name = M.buildFileName(rec, { studentId: '21YHGD001', fullName: 'A', level: 'Y5', classGroup: '' })
+  ok(name.includes('BGK01-260911-847'), name)
+  ok(!/H\./.test(name), name)
+})
+t('a nameless case still produces a usable filename', () => {
+  const rec = M.createEmptyCase('Y5', '')
+  const name = M.buildFileName(rec, null)
+  ok(name.startsWith('ClerkMate_nguoi-hoc_ca-'), name)
+  ok(!name.includes('undefined') && !name.endsWith('_'), name)
 })
 
 // ------------------------------------------------------------ privacy boundary

@@ -393,6 +393,22 @@ check('the covered region is solid black in the stored image at full resolution'
 
 // =========================================================== backup round trip
 G('backup and restore')
+// Changing level has to be reachable from where the level is shown. A gear in
+// the corner is not an answer to "where do I switch level".
+check('the profile line on the home screen opens settings', await ev(`
+  window.location.hash = '#/';
+  await new Promise((r) => setTimeout(r, 1200));
+  const line = document.querySelector('.topbar__profile');
+  if (!line) return false;
+  if (!/Y2|Y5|Y6|SDH/.test(line.textContent)) return false;
+  line.click();
+  await new Promise((r) => setTimeout(r, 1200));
+  return window.location.hash === '#/settings';
+`))
+check('settings can be left again', await ev(`
+  return !!document.querySelector('.topbar .iconbtn--ghost');
+`))
+
 await go('#/settings')
 
 // The level chips are the one decision a learner makes with nothing to go on,

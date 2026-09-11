@@ -607,6 +607,16 @@ p  { margin: 0 0 var(--sp-3); }
 .level-table__pct { font-weight: 700; }
 .level-table__detail { color: var(--ink-500); }
 
+/* The profile line doubles as the way into Settings. */
+.topbar__profile {
+  font-size: inherit;
+  font-weight: 400;
+  color: var(--ink-500);
+  text-align: left;
+}
+.topbar__profile strong { color: var(--brand-700); }
+.topbar__profile-hint { color: var(--brand-700); font-weight: 600; }
+
 .hr { height: 1px; background: var(--line); border: 0; margin: var(--sp-4) 0; }
 
 .link-btn {

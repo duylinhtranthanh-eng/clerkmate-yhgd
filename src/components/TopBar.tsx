@@ -8,7 +8,7 @@ export function TopBar({
   right,
 }: {
   title: string
-  subtitle?: string
+  subtitle?: ReactNode
   onBack?: () => void
   /** Accessible name for the back button, e.g. "Danh sách ca". */
   backLabel?: string

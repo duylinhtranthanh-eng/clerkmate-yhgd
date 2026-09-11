@@ -14,12 +14,22 @@ import { stripDiacritics } from '../parsing/text'
 
 const slug = (s: string) => stripDiacritics(s).replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '')
 
-/** e.g. `ClerkMate_21YHGD001_Ba-H_2026-09-08` — a teacher can sort by student id. */
+/**
+ * e.g. `ClerkMate_21YHGD001_BGK01-260911-847_2026-09-11`.
+ *
+ * Identifies the *learner* and the *case*, never the patient. A filename is the
+ * one part of an export that travels outside the file — it shows up in a chat
+ * preview, a download list, an email subject line, a projector — so the
+ * patient's name has no business in it, whatever is inside the document. The
+ * case is named by its submission code, or failing that by the learner's own
+ * label for it.
+ */
 export function buildFileName(record: CaseRecord, profile: LearnerProfile | null = null): string {
-  const who = record.patient.name || record.patient.caseLabel || 'benh-an'
   const date = (record.visit.date || record.createdAt).slice(0, 10)
-  const student = profile?.studentId ? `${slug(profile.studentId)}_` : ''
-  return `ClerkMate_${student}${slug(who)}_${date}`
+  const learner = slug(profile?.studentId ?? '') || 'nguoi-hoc'
+  const caseRef =
+    slug(record.submission.code) || slug(record.patient.caseLabel) || `ca-${record.id.slice(-6)}`
+  return `ClerkMate_${learner}_${caseRef}_${date}`
 }
 
 /** Opens the browser print dialog on the currently rendered review document. */

@@ -83,9 +83,21 @@ export function HomeScreen({ navigate }: { navigate: (r: Route) => void }) {
       <TopBar
         title="ClerkMate"
         subtitle={
-          profile
-            ? `${profile.fullName} · ${profile.studentId} · ${profile.level}`
-            : 'Từ ghi chú nhanh đến bệnh án hoàn chỉnh'
+          profile ? (
+            // The level is shown here and changed in Settings, so the place it
+            // is shown is the obvious place to reach for when changing it — a
+            // gear in the corner is not an answer to "where do I switch level".
+            <button
+              type="button"
+              className="link-btn topbar__profile"
+              onClick={() => navigate({ name: 'settings' })}
+            >
+              {profile.fullName} · {profile.studentId} · <strong>{profile.level}</strong>
+              <span className="topbar__profile-hint"> · đổi mức</span>
+            </button>
+          ) : (
+            'Từ ghi chú nhanh đến bệnh án hoàn chỉnh'
+          )
         }
         right={
           <button
