@@ -24,7 +24,11 @@ export function clauses(text: string): string[] {
 }
 
 const NEGATORS = [
-  'khong', 'ko', 'chua', 'phu nhan', 'chua ghi nhan',
+  // Vietnamese bedside shorthand, including the single letter learners use.
+  // "chua" negates the clause it is in, but it says "not yet" rather than
+  // "never": a caller turning it into a lifetime negative would be reading in
+  // more than was said, which is why nothing here infers history.
+  'khong', 'ko', 'k', 'chua', 'phu nhan', 'chua ghi nhan', 'khong co',
   'no', 'not', 'denies', 'denied', 'negative', 'without',
 ]
 

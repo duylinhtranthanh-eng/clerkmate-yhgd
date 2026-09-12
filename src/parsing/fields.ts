@@ -102,6 +102,60 @@ export const AI_FIELDS: AiFieldDef[] = [
     describe: 'Triệu chứng chính đã kéo dài bao lâu. Ví dụ: "3 tháng".',
   },
   {
+    target: 'history.socrates.site',
+    sectionId: 'history',
+    label: 'Vị trí',
+    describe: 'Đau hoặc triệu chứng ở đâu. Ví dụ: "gối phải".',
+  },
+  {
+    target: 'history.socrates.onset',
+    sectionId: 'history',
+    label: 'Khởi phát',
+    describe: 'Bắt đầu thế nào và từ khi nào. Ví dụ: "từ từ 3 tháng".',
+  },
+  {
+    target: 'history.socrates.character',
+    sectionId: 'history',
+    label: 'Tính chất',
+    describe: 'Cảm giác ra sao. Ví dụ: "đau âm ỉ", "nhói".',
+  },
+  {
+    target: 'history.socrates.radiation',
+    sectionId: 'history',
+    label: 'Hướng lan',
+    describe: 'Có lan đi đâu không. Chỉ ghi khi người bệnh nói rõ.',
+  },
+  {
+    target: 'history.socrates.associations',
+    sectionId: 'history',
+    label: 'Triệu chứng kèm',
+    describe: 'Triệu chứng đi kèm được nêu rõ.',
+  },
+  {
+    target: 'history.socrates.timeCourse',
+    sectionId: 'history',
+    label: 'Diễn tiến',
+    describe: 'Thay đổi theo thời gian. Ví dụ: "nặng dần", "từng cơn".',
+  },
+  {
+    target: 'history.socrates.exacerbatingRelieving',
+    sectionId: 'history',
+    label: 'Tăng / giảm',
+    describe: 'Điều gì làm nặng hơn hoặc nhẹ hơn. Ví dụ: "tăng khi lên cầu thang, nghỉ thì đỡ".',
+  },
+  {
+    target: 'history.socrates.severity',
+    sectionId: 'history',
+    label: 'Mức độ',
+    describe: 'Mức độ theo lời người bệnh, thang 0–10 nếu có. Ví dụ: "6/10".',
+  },
+  {
+    target: 'history.systemsReview.append',
+    sectionId: 'history',
+    label: 'Lược qua các cơ quan',
+    describe: 'Chỉ những cơ quan người bệnh nói rõ là có hoặc không có triệu chứng.',
+  },
+  {
     target: 'history.hpi.append',
     sectionId: 'history',
     label: 'Thêm vào diễn tiến bệnh sử',
@@ -150,6 +204,20 @@ export const AI_FIELDS: AiFieldDef[] = [
       const label = (fields.label || value).trim()
       return label ? { label, since: (fields.since ?? '').trim() } : null
     },
+  },
+  {
+    target: 'allergies.none',
+    sectionId: 'personalHistory',
+    label: 'Dị ứng — đã hỏi, không ghi nhận',
+    describe:
+      'Chỉ dùng khi người bệnh nói rõ là không dị ứng. Không suy ra từ việc ghi chú không nhắc tới dị ứng.',
+  },
+  {
+    target: 'pastMedical.none',
+    sectionId: 'personalHistory',
+    label: 'Tiền căn — đã hỏi, không có bệnh nền',
+    describe:
+      'Chỉ dùng khi người bệnh nói rõ là không có bệnh nền. Không suy ra từ việc ghi chú không nhắc tới.',
   },
   {
     target: 'allergies.add',

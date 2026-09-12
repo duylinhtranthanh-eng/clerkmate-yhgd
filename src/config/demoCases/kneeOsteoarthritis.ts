@@ -6,7 +6,7 @@
  */
 
 import type { CaseRecord, LearnerLevel } from '../../types/case'
-import { createEmptyCase } from '../../types/factory'
+import { createEmptyCase, createFragment } from '../../types/factory'
 import { uid } from '../../utils/id'
 import { computeBmi, todayIso } from '../../utils/format'
 import { EXAM_NORMAL_BY_ID } from '../clinical'
@@ -39,17 +39,10 @@ export function buildKneeOsteoarthritisCase(level: LearnerLevel = 'SDH'): CaseRe
   }
 
   c.quickNotes = [
-    {
-      id: uid('qn'),
-      createdAt: new Date().toISOString(),
-      text:
-        'Nữ 58 tuổi, nội trợ. Đau khớp gối phải 3 tháng, tăng khi lên cầu thang. ' +
+    createFragment('text', 'Nữ 58 tuổi, nội trợ. Đau khớp gối phải 3 tháng, tăng khi lên cầu thang. ' +
         'THA 10 năm, amlodipine 5mg 1v/ngày. Mẹ đái tháo đường. ' +
         'Không hút thuốc, không uống rượu. HA 140/85, mạch 78. 62kg, 155cm. ' +
-        'Lo lắng sợ phải thay khớp.',
-      filedInto: ['patient', 'history', 'personalHistory', 'lifestyle', 'examination', 'medications'],
-      archived: false,
-    },
+        'Lo lắng sợ phải thay khớp.', ['patient', 'history', 'personalHistory', 'lifestyle', 'examination', 'medications']),
   ]
 
   c.history = {

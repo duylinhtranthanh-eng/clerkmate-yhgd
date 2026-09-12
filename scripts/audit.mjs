@@ -34,6 +34,7 @@ export { submit, reopen, recordReview, unreadReviews, acknowledgeReviews, mergeR
 export { draftsFromResponse } from '${process.cwd()}/src/parsing/aiStructurer'
 export { AI_FIELDS, AI_FIELD_BY_TARGET, aiFieldSchema } from '${process.cwd()}/src/parsing/fields'
 export { heuristicStructurer } from '${process.cwd()}/src/parsing/heuristicStructurer'
+export { createFragment } from '${process.cwd()}/src/types/factory'
 export { applyMany, canApply } from '${process.cwd()}/src/parsing/apply'
 export { buildKneeOsteoarthritisCase } from '${process.cwd()}/src/config/demoCases/kneeOsteoarthritis'
 export { buildElderlyMultimorbidCase } from '${process.cwd()}/src/config/demoCases/elderlyMultimorbid'
@@ -63,6 +64,25 @@ const failures = []
 const t = (name, fn) => {
   try {
     fn()
+    pass += 1
+    console.log('  ✓', name)
+  } catch (e) {
+    failures.push(`${name}: ${e.message}`)
+    console.log('  ✗', name, '—', e.message)
+  }
+}
+
+/**
+ * One check with an asynchronous body, which the caller must await.
+ *
+ * Kept separate from `t` on purpose. Making `t` itself async would defer every
+ * synchronous check to a microtask, so they would all report *after* the
+ * summary had already been printed — and a check whose promise the runner
+ * drops prints a tick and then fails silently, which is worse than no check.
+ */
+const ta = async (name, fn) => {
+  try {
+    await fn()
     pass += 1
     console.log('  ✓', name)
   } catch (e) {
@@ -329,6 +349,110 @@ t('marking an item bedside changes no arithmetic', () => {
     'a bedside item landed outside the three tiers')
   eq(snap.mandatoryTotal + snap.recommendedTotal + snap.optionalTotal, snap.items.length,
     'the tier totals stopped adding up to the item count')
+})
+
+// ------------------------------------------------------- quick capture
+console.log('\nquick capture — structuring the spoken and the typed')
+const parse = (text) => M.heuristicStructurer.structure(text, M.createEmptyCase('Y5', 'x'))
+const targets = (sug) => sug.map((s) => s.targetKey)
+const valueOf = (sug, key) => sug.find((s) => s.targetKey === key)?.value
+
+await ta('scenario 1: typed shorthand lands in the SOCRATES boxes', async () => {
+  const sug = await parse('đau gối P 3th, tăng khi cầu thang, nghỉ đỡ, đau 6/10')
+  eq(valueOf(sug, 'history.socrates.site'), 'Khớp gối phải')
+  eq(valueOf(sug, 'history.duration'), '3 tháng')
+  eq(valueOf(sug, 'history.socrates.severity'), '6/10')
+  const f = valueOf(sug, 'history.socrates.exacerbatingRelieving') ?? ''
+  ok(/cầu thang/i.test(f), `exacerbating missing: ${f}`)
+  ok(/nghỉ/i.test(f), `relieving missing: ${f}`)
+})
+await ta('scenario 2: a transcript yields negatives and ICE, not positives', async () => {
+  const sug = await parse('Không sốt, không sưng nóng đỏ. Bệnh nhân lo phải mổ và mong được hướng dẫn tập ở nhà.')
+  ok(!targets(sug).includes('redFlags.present'), 'a negative became a positive red flag')
+  ok(targets(sug).includes('ice.concerns'), `no concern: ${targets(sug).join(',')}`)
+})
+await ta('scenario 3: medication and an explicit negative allergy', async () => {
+  const sug = await parse('Tăng huyết áp 10 năm, uống amlodipine 5 mg mỗi sáng, không dị ứng thuốc.')
+  ok(targets(sug).includes('pastMedical.add'), 'no past history')
+  ok(targets(sug).includes('medications.add'), 'no medication')
+  const allergy = sug.find((s) => s.targetKey === 'allergies.add')
+  ok(!allergy, 'an explicit negative was filed as an allergy entry')
+})
+await ta('scenario 4: what was never said stays unsaid', async () => {
+  const sug = await parse('đau gối phải 3 tháng')
+  for (const forbidden of ['allergies.add', 'lifestyle.smoking', 'redFlags.absent', 'redFlags.present']) {
+    ok(!targets(sug).includes(forbidden), `invented ${forbidden}`)
+  }
+  ok(!targets(sug).includes('history.socrates.radiation'), 'invented a radiation answer')
+  ok(!targets(sug).includes('history.socrates.severity'), 'invented a severity')
+})
+await ta('every suggestion quotes text that is really in the note', async () => {
+  const note = 'Nữ 58 tuổi. Đau gối P 3 tháng, tăng khi lên cầu thang, 6/10. Lo phải mổ.'
+  const sug = await parse(note)
+  ok(sug.length > 0, 'nothing parsed')
+  const norm = (x) => x.toLowerCase().replace(/\s+/g, ' ').trim()
+  for (const s of sug) {
+    ok(s.snippet && s.snippet.trim().length > 0, `${s.targetKey} has no snippet`)
+    ok(norm(note).includes(norm(s.snippet)), `${s.targetKey} quotes text not in the note: "${s.snippet}"`)
+  }
+})
+await ta('one fragment produces many suggestions across sections', async () => {
+  const sug = await parse('Nữ 58 tuổi, nội trợ. Đau gối P 3 tháng, 6/10. THA 10 năm, amlodipine 5mg/ngày. Không hút thuốc.')
+  ok(sug.length >= 6, `${sug.length} suggestions`)
+  ok(new Set(sug.map((s) => s.sectionId)).size >= 3, 'all in one section')
+})
+t('no structuring target can reach diagnosis, management or investigations', () => {
+  for (const f of M.AI_FIELDS) {
+    ok(!/^(dx|mx|meds\.plan|inv|prev|risk)\./.test(f.target), `unsafe target ${f.target}`)
+    ok(!['diagnosis', 'management', 'investigations', 'risk', 'prevention'].includes(f.sectionId),
+      `unsafe section ${f.sectionId} for ${f.target}`)
+  }
+})
+await ta('scenario 5: a different value in a one-answer box is a conflict, not an overwrite', async () => {
+  const rec = M.createEmptyCase('Y5', 'x')
+  rec.history.socrates.severity = '6/10'
+  const sug = await M.heuristicStructurer.structure('Lúc nặng nhất đau 8/10', rec)
+  const sev = sug.find((s) => s.targetKey === 'history.socrates.severity')
+  ok(sev, 'severity not parsed')
+  eq(sev.value, '8/10')
+  eq(sev.conflictsWith, '6/10', `conflict not reported: ${JSON.stringify(sev.conflictsWith)}`)
+  eq(rec.history.socrates.severity, '6/10', 'the record was mutated by parsing')
+})
+await ta('the same value again is a duplicate, not a conflict', async () => {
+  const rec = M.createEmptyCase('Y5', 'x')
+  rec.history.socrates.severity = '6/10'
+  const sug = await M.heuristicStructurer.structure('đau 6/10', rec)
+  const sev = sug.find((s) => s.targetKey === 'history.socrates.severity')
+  ok(!sev || sev.alreadyPresent === true, 'a repeat was not marked as already present')
+  ok(!sev || !sev.conflictsWith, 'a repeat was reported as a conflict')
+})
+await ta('a second medication is not a conflict with the first', async () => {
+  const rec = M.createEmptyCase('Y5', 'x')
+  rec.medications.push({ id: 'm1', name: 'Amlodipine', dose: '5 mg', route: '', frequency: '', duration: '', indication: '', adherence: '', note: '' })
+  const sug = await M.heuristicStructurer.structure('uống metformin 850mg 2 lần/ngày', rec)
+  const med = sug.find((s) => s.targetKey === 'medications.add')
+  ok(med, 'medication not parsed')
+  ok(!med.conflictsWith, 'adding a drug was called a conflict')
+})
+
+t('a fragment keeps what was captured apart from what was edited', () => {
+  const f = M.createFragment('voice', 'khong sot')
+  eq(f.originalText, 'khong sot')
+  eq(f.source, 'voice')
+  eq(f.transcriptionStatus, 'ready')
+  eq(f.processingStatus, 'unprocessed')
+  const edited = { ...f, text: 'Không sốt' }
+  eq(edited.originalText, 'khong sot', 'editing overwrote what was heard')
+})
+t('a note written before fragments existed migrates without loss', () => {
+  const rec = M.migrateCase({
+    id: 'c1', quickNotes: [{ id: 'n1', createdAt: '2026-01-01T00:00:00.000Z', text: 'đau gối', filedInto: ['history'], archived: false }],
+  })
+  eq(rec.quickNotes.length, 1)
+  const n = rec.quickNotes[0]
+  eq(n.id, 'n1'); eq(n.text, 'đau gối'); eq(n.originalText, 'đau gối')
+  eq(n.source, 'text'); eq(n.processingStatus, 'fully_applied')
+  eq(n.filedInto.join(','), 'history')
 })
 
 // --------------------------------------------------------- export file names

@@ -26,6 +26,16 @@ export interface StructuringSuggestion {
   /** Set by the parser when the record already holds this exact value. */
   alreadyPresent?: boolean
   /**
+   * The record already holds something *different* here.
+   *
+   * A learner who says "lúc nặng nhất 8/10" has not corrected the 6/10 they
+   * recorded earlier — both may be true of the same knee. So the existing value
+   * travels with the suggestion, the review sheet shows both, and nothing is
+   * overwritten until someone chooses. Contradictions are for people to
+   * resolve; the app's job is to notice them.
+   */
+  conflictsWith?: string
+  /**
    * Which backend proposed this. The review sheet says so out loud, because a
    * learner deciding whether to accept a suggestion should know whether it came
    * off their own device or out of a model.

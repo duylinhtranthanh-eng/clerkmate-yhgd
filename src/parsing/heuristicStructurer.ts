@@ -33,8 +33,11 @@ interface Draft {
   reason?: string
 }
 
-const DURATION_RE = /(\d+(?:[.,]\d+)?)\s*(gio|ngay|tuan|thang|nam|hour|day|week|month|year)s?\b/
+// `th` and `thg` are what gets written at the bedside; `3th` is three months.
+const DURATION_RE =
+  /(\d+(?:[.,]\d+)?)\s*(gio|ngay|tuan|thang|thg|th|nam|hour|day|week|month|year)s?\b/
 const DURATION_LABEL: Record<string, string> = {
+  th: 'tháng', thg: 'tháng',
   gio: 'giờ', hour: 'giờ',
   ngay: 'ngày', day: 'ngày',
   tuan: 'tuần', week: 'tuần',
@@ -59,6 +62,20 @@ function findCondition(clause: string): string | null {
   return null
 }
 
+/**
+ * The span of the original note that a normalized match covers.
+ *
+ * `norm` only strips diacritics and lowercases, character for character, so an
+ * index into the normalized string is an index into the original. Quoting the
+ * normalized text instead would show the learner "nu" when they wrote "Nữ" —
+ * a provenance trail they cannot recognise is not provenance.
+ */
+function rawSpan(text: string, normalized: string, match: RegExpMatchArray): string {
+  const at = match.index
+  if (at === undefined || normalized.length !== text.length) return match[0]
+  return text.slice(at, at + match[0].length)
+}
+
 export function parseNote(text: string, record: CaseRecord): StructuringSuggestion[] {
   const drafts: Draft[] = []
   const add = (d: Draft) => drafts.push(d)
@@ -79,7 +96,7 @@ export function parseNote(text: string, record: CaseRecord): StructuringSuggesti
       fieldLabel: 'Giới tính',
       value: sex === 'female' ? 'Nữ' : 'Nam',
       payload: { sex },
-      snippet: sexMatch[0],
+      snippet: rawSpan(text, all, sexMatch),
       confidence: 'high',
     })
   }
@@ -97,7 +114,7 @@ export function parseNote(text: string, record: CaseRecord): StructuringSuggesti
         fieldLabel: 'Tuổi',
         value: `${age} tuổi`,
         payload: { age: String(age) },
-        snippet: ageMatch[0],
+        snippet: rawSpan(text, all, ageMatch),
         confidence: 'high',
       })
     }
@@ -341,12 +358,14 @@ export function parseNote(text: string, record: CaseRecord): StructuringSuggesti
     if (!/di ung|allerg/.test(n)) return
     consumed.add(idx)
     if (isNegated(clause)) {
+      // "không dị ứng thuốc" is an answer, and it belongs in the box that says
+      // the question was asked — not as an allergy entry called "none", which
+      // is what a reader of the printed record would see as a real allergy.
       add({
-        targetKey: 'allergies.add',
+        targetKey: 'allergies.none',
         sectionId: 'personalHistory',
-        fieldLabel: 'Dị ứng',
-        value: 'Chưa ghi nhận dị ứng',
-        payload: { agent: 'Chưa ghi nhận', reaction: '', severity: '' },
+        fieldLabel: 'Dị ứng — đã hỏi, không ghi nhận',
+        value: 'Đã hỏi, không ghi nhận dị ứng',
         snippet: clause,
         confidence: 'high',
       })
@@ -469,7 +488,7 @@ export function parseNote(text: string, record: CaseRecord): StructuringSuggesti
         confidence: 'medium',
       })
     }
-    if (/lo lang|lo so|\bso bi\b|\bso rang\b|worried|lo ngai/.test(n)) {
+    if (/lo lang|lo so|\bso bi\b|\bso rang\b|worried|lo ngai|\blo\b/.test(n)) {
       add({
         targetKey: 'ice.concerns',
         sectionId: 'history',
@@ -479,7 +498,7 @@ export function parseNote(text: string, record: CaseRecord): StructuringSuggesti
         confidence: 'medium',
       })
     }
-    if (/mong muon|muon duoc|hy vong|de nghi bac si|xin duoc/.test(n)) {
+    if (/mong muon|muon duoc|hy vong|de nghi bac si|xin duoc|\bmong\b/.test(n)) {
       add({
         targetKey: 'ice.expectations',
         sectionId: 'history',
@@ -520,6 +539,12 @@ export function parseNote(text: string, record: CaseRecord): StructuringSuggesti
     }
   }
 
+  // --- SOCRATES ------------------------------------------------------------
+  // Each element is only proposed when the note says it. A learner describing a
+  // knee in one breath should not have to open eight boxes; a learner who never
+  // mentioned radiation must not end up with a record claiming there is none.
+  socrates(list, add)
+
   // The whole note always remains available as narrative HPI.
   if (text.trim().length > 0) {
     add({
@@ -547,15 +572,139 @@ export function finalise(
   drafts: Draft[],
   origin: 'local' | 'ai',
 ): StructuringSuggestion[] {
-  return dedupe(drafts).map((d) => ({
-    id: uid('sg'),
-    ...d,
-    origin,
-    alreadyPresent: isAlreadyPresent(record, d),
-  }))
+  return dedupe(drafts).map((d) => {
+    const already = isAlreadyPresent(record, d)
+    const current = already ? '' : currentScalar(record, d.targetKey)
+    return {
+      id: uid('sg'),
+      ...d,
+      origin,
+      alreadyPresent: already,
+      conflictsWith: current && current.trim() !== d.value.trim() ? current : undefined,
+    }
+  })
+}
+
+/**
+ * What a single-value target already holds, or '' for list targets.
+ *
+ * List targets are excluded on purpose: a second medication is not a conflict
+ * with the first. Only a box that can hold one answer can be contradicted.
+ */
+function currentScalar(record: CaseRecord, targetKey: string): string {
+  const h = record.history
+  const soc = targetKey.startsWith('history.socrates.')
+    ? (h.socrates as unknown as Record<string, string>)[targetKey.slice('history.socrates.'.length)]
+    : undefined
+  if (soc !== undefined) return soc
+  switch (targetKey) {
+    case 'history.chiefComplaint': return h.chiefComplaint
+    case 'history.duration': return h.duration
+    case 'ice.ideas': return h.ice.ideas
+    case 'ice.concerns': return h.ice.concerns
+    case 'ice.expectations': return h.ice.expectations
+    case 'patient.occupation': return record.patient.occupation
+    case 'lifestyle.smoking': return record.lifestyle.smoking.status
+    case 'lifestyle.alcohol': return record.lifestyle.alcohol.status
+    case 'lifestyle.physicalActivity': return record.lifestyle.physicalActivity
+    case 'lifestyle.diet': return record.lifestyle.diet
+    case 'lifestyle.sleep': return record.lifestyle.sleep
+    default: return ''
+  }
 }
 
 export type { Draft }
+
+const SOC_CHARACTER = ['am i', 'nhoi', 'buot', 'rat', 'quan', 'tuc', 'choi', 'boi hoi', 'dan dat']
+const SOC_COURSE: [RegExp, string][] = [
+  [/nang dan|tang dan/, 'Nặng dần'],
+  [/giam dan|do dan/, 'Giảm dần'],
+  [/tung con|thanh con/, 'Từng cơn'],
+  [/lien tuc|suot ngay/, 'Liên tục'],
+  [/dai dang|keo dai/, 'Dai dẳng'],
+]
+const SOC_ONSET: [RegExp, string][] = [
+  [/tu tu/, 'Từ từ'],
+  [/dot ngot|cap tinh|bat ngo/, 'Đột ngột'],
+]
+const SOC_SITES: [RegExp, string][] = [
+  [/goi/, 'Khớp gối'], [/vai/, 'Vai'], [/lung/, 'Lưng'], [/co\b/, 'Cổ'],
+  [/nguc/, 'Ngực'], [/bung/, 'Bụng'], [/dau\s+(?:o\s+)?dau\b|nhuc dau/, 'Đầu'],
+  [/hong/, 'Hông'], [/khuyu/, 'Khuỷu'], [/co tay/, 'Cổ tay'], [/co chan/, 'Cổ chân'],
+]
+
+/**
+ * Pulls the SOCRATES elements a note actually states.
+ *
+ * Every element needs its own wording in the note — "tăng khi", "lan", "6/10".
+ * The exacerbating and relieving factors share one box on the record, so they
+ * are joined into it rather than invented as two fields the form does not have.
+ */
+function socrates(list: string[], add: (d: Draft) => void): void {
+  const el = (
+    key: string,
+    fieldLabel: string,
+    value: string,
+    snippet: string,
+    confidence: Draft['confidence'] = 'medium',
+  ) => add({ targetKey: `history.socrates.${key}`, sectionId: 'history', fieldLabel, value, snippet, confidence })
+
+  const worse: string[] = []
+  const better: string[] = []
+
+  for (const clause of list) {
+    const c = norm(clause)
+    const raw = clause.trim()
+
+    const severity = c.match(/(\d{1,2})\s*\/\s*10/)
+    if (severity && Number(severity[1]) <= 10) el('severity', 'Mức độ', `${severity[1]}/10`, raw, 'high')
+
+    const side = /\b(phai|p)\b/.test(c) ? ' phải' : /\b(trai|t)\b/.test(c) ? ' trái' : ''
+    for (const [re, label] of SOC_SITES) {
+      if (re.test(c)) {
+        el('site', 'Vị trí', `${label}${side}`, raw, side ? 'high' : 'medium')
+        break
+      }
+    }
+
+    // The value shown to the learner has to be their own words, accents and
+    // all, so the match is located on the normalized clause and then read back
+    // out of the raw one.
+    const span = (m: RegExpMatchArray | null, group: number): string => {
+      if (!m || m.index === undefined || c.length !== raw.length) return m ? m[group].trim() : ''
+      const at = c.indexOf(m[group], m.index)
+      return at < 0 ? m[group].trim() : raw.slice(at, at + m[group].length).trim()
+    }
+
+    const up = c.match(/(?:tang|nang hon|dau hon|kho hon)\s*(?:len\s*)?(?:khi|luc|neu)?\s*(.{2,40})/)
+    if (up) worse.push(span(up, 1))
+    const down = c.match(/(?:giam|do hon|do\b|bot|nhe hon)\s*(?:khi|luc|neu|thi)?\s*(.{2,40})/)
+    if (down) better.push(span(down, 1))
+    const rest = c.match(/\bnghi\b\s*(?:ngoi|thi)?\s*(?:do|giam|bot)/)
+    if (rest) better.push('nghỉ')
+
+    const rad = c.match(/\blan\b\s*(?:len|xuong|ra|toi|den)?\s*(.{2,40})/)
+    if (rad) el('radiation', 'Hướng lan', `Lan ${span(rad, 1)}`, raw)
+
+    for (const k of SOC_CHARACTER) {
+      if (c.includes(k)) {
+        el('character', 'Tính chất', titleCase(raw), raw)
+        break
+      }
+    }
+    for (const [re, label] of SOC_COURSE) if (re.test(c)) { el('timeCourse', 'Diễn tiến', label, raw); break }
+    for (const [re, label] of SOC_ONSET) if (re.test(c)) { el('onset', 'Khởi phát', label, raw); break }
+  }
+
+  const factors = [
+    worse.length > 0 ? `Tăng khi ${worse.join(', ')}` : '',
+    better.length > 0 ? `Giảm khi ${better.join(', ')}` : '',
+  ].filter(Boolean)
+  if (factors.length > 0) {
+    const snippet = list.find((cl) => /tang|giam|nghi|do\b|bot/.test(norm(cl))) ?? list[0]
+    el('exacerbatingRelieving', 'Tăng / giảm', factors.join('. '), snippet.trim(), 'medium')
+  }
+}
 
 function dedupe(drafts: Draft[]): Draft[] {
   const seen = new Set<string>()
@@ -569,8 +718,11 @@ function dedupe(drafts: Draft[]): Draft[] {
   return out
 }
 
+const eq = (a: string, b: string) => norm(a).trim() === norm(b).trim()
+
 function isAlreadyPresent(record: CaseRecord, d: Draft): boolean {
-  const eq = (a: string, b: string) => norm(a).trim() === norm(b).trim()
+  const scalar = currentScalar(record, d.targetKey)
+  if (scalar) return eq(scalar, d.value)
   switch (d.targetKey) {
     case 'patient.sex':
       return record.patient.sex === d.payload?.sex

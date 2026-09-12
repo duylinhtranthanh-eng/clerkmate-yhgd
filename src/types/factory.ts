@@ -3,7 +3,15 @@
  * written by an older build keep opening.
  */
 
-import type { CaseRecord, ExamStatus, LearnerLevel, Screem, SystemExam } from './case'
+import type {
+  CaptureSource,
+  CaseRecord,
+  ExamStatus,
+  LearnerLevel,
+  QuickNote,
+  Screem,
+  SystemExam,
+} from './case'
 import { uid } from '../utils/id'
 import { todayIso } from '../utils/format'
 import { EXAM_SYSTEMS, SCREENING_ITEMS, VACCINATION_ITEMS } from '../config/clinical'
@@ -269,6 +277,58 @@ export function createEmptyCase(
  * cleared so the learner confirms once more, and that confirmation now produces
  * a real derivative.
  */
+/**
+ * Brings a note written before fragments existed up to the new shape.
+ *
+ * A legacy note has text and nothing else, so it was typed, its original text
+ * is its text, and whether it was ever filed is already recorded in
+ * `filedInto`. Nothing is rewritten and nothing is lost — the worst case is a
+ * fragment that says "unprocessed" about work the learner already did, which
+ * the inbox corrects as soon as it is opened.
+ */
+/**
+ * A freshly captured fragment.
+ *
+ * One constructor for both sources, so a transcript and a typed line are the
+ * same kind of thing from here on — and `originalText` starts out equal to the
+ * working text, which is what "the learner has not edited it yet" means.
+ */
+export function createFragment(
+  source: CaptureSource,
+  text: string,
+  filedInto: string[] = [],
+): QuickNote {
+  return {
+    id: uid('note'),
+    createdAt: new Date().toISOString(),
+    source,
+    originalText: text,
+    text,
+    transcriptionStatus: source === 'voice' ? 'ready' : 'not_applicable',
+    processingStatus: filedInto.length > 0 ? 'fully_applied' : 'unprocessed',
+    filedInto,
+    archived: false,
+  }
+}
+
+function migrateQuickNote(stored: unknown): QuickNote {
+  const n = (stored ?? {}) as Partial<QuickNote> & { text?: string }
+  const text = n.text ?? ''
+  return {
+    id: n.id ?? uid('note'),
+    createdAt: n.createdAt ?? new Date().toISOString(),
+    updatedAt: n.updatedAt,
+    source: n.source ?? 'text',
+    originalText: n.originalText ?? text,
+    text,
+    transcriptionStatus: n.transcriptionStatus ?? (n.source === 'voice' ? 'ready' : 'not_applicable'),
+    processingStatus:
+      n.processingStatus ?? ((n.filedInto ?? []).length > 0 ? 'fully_applied' : 'unprocessed'),
+    filedInto: n.filedInto ?? [],
+    archived: n.archived === true,
+  }
+}
+
 function migrateAttachment(stored: CaseRecord['attachments'][number]): CaseRecord['attachments'][number] {
   const a = stored as Partial<CaseRecord['attachments'][number]> & { blobKey: string }
   if (typeof a.sanitizedBlobKey === 'string') {
@@ -425,6 +485,7 @@ export function migrateCase(raw: unknown): CaseRecord {
     reflection: { ...base.reflection, ...(stored.reflection ?? {}) },
     submission: { ...base.submission, ...(stored.submission ?? {}) },
     attachments: (stored.attachments ?? []).map(migrateAttachment),
+    quickNotes: (stored.quickNotes ?? []).map(migrateQuickNote),
     schemaVersion: SCHEMA_VERSION,
   }
   return merged

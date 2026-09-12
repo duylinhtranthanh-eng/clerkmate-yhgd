@@ -11,7 +11,7 @@
  */
 
 import type { CaseRecord, LearnerLevel } from '../../types/case'
-import { createEmptyCase } from '../../types/factory'
+import { createEmptyCase, createFragment } from '../../types/factory'
 import { uid } from '../../utils/id'
 import { computeBmi, todayIso } from '../../utils/format'
 import { EXAM_NORMAL_BY_ID } from '../clinical'
@@ -44,17 +44,10 @@ export function buildElderlyMultimorbidCase(level: LearnerLevel = 'SDH'): CaseRe
   }
 
   c.quickNotes = [
-    {
-      id: uid('qn'),
-      createdAt: new Date().toISOString(),
-      text:
-        'BN nam 74t, hưu trí, sống một mình. Tái khám ĐTĐ + THA. Té 2 lần 3 tháng, lần sau bầm hông. ' +
+    createFragment('text', 'BN nam 74t, hưu trí, sống một mình. Tái khám ĐTĐ + THA. Té 2 lần 3 tháng, lần sau bầm hông. ' +
         'Đang uống metformin 850mg 2 lần/ngày, amlodipine 5mg, gliclazide 30mg, aspirin 81mg, atorvastatin 20mg. ' +
         'HA 152/88, M 76, NT 18, CN 58kg, CC 165cm. Mẹ ĐTĐ, cha NMCT. ' +
-        'Không hút thuốc 10 năm nay, trước hút 30 gói-năm. Buồn, ít muốn làm gì từ khi vợ mất.',
-      filedInto: ['patient', 'history', 'personalHistory', 'examination', 'medications', 'familyHistory'],
-      archived: false,
-    },
+        'Không hút thuốc 10 năm nay, trước hút 30 gói-năm. Buồn, ít muốn làm gì từ khi vợ mất.', ['patient', 'history', 'personalHistory', 'examination', 'medications', 'familyHistory']),
   ]
 
   c.history = {

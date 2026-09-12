@@ -31,6 +31,40 @@ const appliers: Record<string, Applier> = {
   'history.duration': (d, s) => {
     d.history.duration = s.value
   },
+  // SOCRATES, one applier per element. The learner describes a symptom in one
+  // breath and the parts land in the eight boxes the form asks for, which is
+  // the whole point of not making them think about the form at the bedside.
+  'history.socrates.site': (d, s) => {
+    d.history.socrates.site = s.value
+  },
+  'history.socrates.onset': (d, s) => {
+    d.history.socrates.onset = s.value
+  },
+  'history.socrates.character': (d, s) => {
+    d.history.socrates.character = s.value
+  },
+  'history.socrates.radiation': (d, s) => {
+    d.history.socrates.radiation = s.value
+  },
+  'history.socrates.associations': (d, s) => {
+    d.history.socrates.associations = s.value
+  },
+  'history.socrates.timeCourse': (d, s) => {
+    d.history.socrates.timeCourse = s.value
+  },
+  'history.socrates.exacerbatingRelieving': (d, s) => {
+    d.history.socrates.exacerbatingRelieving = s.value
+  },
+  'history.socrates.severity': (d, s) => {
+    d.history.socrates.severity = s.value
+  },
+
+  'history.systemsReview.append': (d, s) => {
+    d.history.systemsReview = d.history.systemsReview.trim()
+      ? `${d.history.systemsReview.trim()}\n${s.value}`
+      : s.value
+  },
+
   'history.hpi.append': (d, s) => {
     d.history.hpi = d.history.hpi.trim() ? `${d.history.hpi.trim()}\n${s.value}` : s.value
   },
@@ -63,6 +97,14 @@ const appliers: Record<string, Applier> = {
       status: '',
       note: '',
     })
+  },
+  'allergies.none': (d) => {
+    // The flag the form calls "đã hỏi, không ghi nhận". An empty allergy list
+    // cannot say whether anyone asked; this can.
+    d.personalHistory.noAllergies = true
+  },
+  'pastMedical.none': (d) => {
+    d.personalHistory.noPastMedical = true
   },
   'allergies.add': (d, s) => {
     d.personalHistory.allergies.push({

@@ -53,10 +53,49 @@ export interface Visit {
 // Quick capture
 // ---------------------------------------------------------------------------
 
+/** How a fragment was captured. */
+export type CaptureSource = 'text' | 'voice'
+
+export type TranscriptionStatus =
+  | 'not_applicable'
+  | 'recording'
+  | 'transcribing'
+  | 'ready'
+  | 'failed'
+
+export type FragmentStatus =
+  | 'unprocessed'
+  | 'suggestions_ready'
+  | 'partially_applied'
+  | 'fully_applied'
+  | 'needs_review'
+
+/**
+ * One thing the learner captured, typed or spoken.
+ *
+ * Fragments are the unit of capture, not one growing note: at the bedside a
+ * learner says a sentence, files it, and says another. Both sources feed the
+ * same pipeline downstream — a transcript is text, and once it is text nothing
+ * else in the app needs to know where it came from.
+ */
 export interface QuickNote {
   id: string
   createdAt: string
+  /** Set when the learner edits the working text. */
+  updatedAt?: string
+  source: CaptureSource
+  /**
+   * What was captured, kept for provenance.
+   *
+   * A transcript is a guess about what was said, and the learner will correct
+   * it; the correction must not erase what the machine actually heard. Every
+   * suggestion quotes `text`, so the original is evidence, not input.
+   */
+  originalText: Text
+  /** The working text: what gets structured, and what the learner may edit. */
   text: Text
+  transcriptionStatus?: TranscriptionStatus
+  processingStatus?: FragmentStatus
   /** Section ids this note has already been filed into. */
   filedInto: string[]
   archived: boolean

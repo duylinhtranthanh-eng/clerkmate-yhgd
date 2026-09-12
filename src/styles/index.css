@@ -617,6 +617,17 @@ p  { margin: 0 0 var(--sp-3); }
 .topbar__profile strong { color: var(--brand-700); }
 .topbar__profile-hint { color: var(--brand-700); font-weight: 600; }
 
+/* A contradiction the learner has to resolve, shown rather than resolved. */
+.conflict {
+  margin-top: 6px;
+  padding: 6px 8px;
+  border-left: 3px solid var(--warn-bg);
+  background: var(--warn-bg);
+  border-radius: var(--r-sm);
+  display: grid;
+  gap: 2px;
+}
+
 .hr { height: 1px; background: var(--line); border: 0; margin: var(--sp-4) 0; }
 
 .link-btn {
