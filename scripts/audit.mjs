@@ -28,6 +28,7 @@ writeFileSync(
 export { REQUIREMENTS, REQUIREMENT_BY_ID } from '${process.cwd()}/src/config/requirements'
 export { LEVELS, LEVEL_ORDER, TIER_WEIGHTS, resolveLevelRequirements } from '${process.cwd()}/src/config/levels'
 export { evaluateCompleteness, missingByTier, sectionProgress, bedsideMinimum } from '${process.cwd()}/src/completeness/engine'
+export { historyGaps } from '${process.cwd()}/src/completeness/gaps'
 export { createEmptyCase, migrateCase } from '${process.cwd()}/src/types/factory'
 export { caseStatus, submitBlockers, STATUS, latestReview } from '${process.cwd()}/src/workflow/status'
 export { submit, reopen, recordReview, unreadReviews, acknowledgeReviews, mergeReview, buildBundle, parseBundle, makeSubmissionCode } from '${process.cwd()}/src/workflow/submission'
@@ -453,6 +454,59 @@ t('a note written before fragments existed migrates without loss', () => {
   eq(n.id, 'n1'); eq(n.text, 'đau gối'); eq(n.originalText, 'đau gối')
   eq(n.source, 'text'); eq(n.processingStatus, 'fully_applied')
   eq(n.filedInto.join(','), 'history')
+})
+
+// -------------------------------------------------------------- gap finder
+console.log('\ngap finder — what is still unasked')
+const flat = (groups) => groups.flatMap((g) => g.items)
+t('a blank case is asked about the things you find out by asking', () => {
+  const groups = M.historyGaps(M.createEmptyCase('Y5', 'x'))
+  ok(groups.length > 0, 'nothing suggested on a blank case')
+  const titles = groups.map((g) => g.title)
+  ok(titles.includes('SOCRATES'), titles.join(','))
+  ok(titles.includes('ICE'), titles.join(','))
+  ok(flat(groups).every((i) => !i.filled), 'a blank case had something marked filled')
+})
+t('it names the SOCRATES elements one by one, not just "SOCRATES"', () => {
+  const soc = M.historyGaps(M.createEmptyCase('Y5', 'x')).find((g) => g.title === 'SOCRATES')
+  eq(soc.items.length, 8)
+  ok(soc.items.some((i) => /Hướng lan/.test(i.label)), 'no radiation row')
+  ok(soc.items.every((i) => i.prompt && i.prompt.length > 8), 'an element has no question')
+})
+t('what is already recorded stops being asked for', () => {
+  const rec = M.createEmptyCase('Y5', 'x')
+  rec.history.socrates.radiation = 'Không lan'
+  rec.history.ice.concerns = 'Sợ phải mổ'
+  const groups = M.historyGaps(rec)
+  const soc = groups.find((g) => g.title === 'SOCRATES')
+  eq(soc.items.find((i) => /Hướng lan/.test(i.label)).filled, true)
+  const ice = groups.find((g) => g.title === 'ICE')
+  eq(ice.items.find((i) => /Concern/.test(i.label)).filled, true)
+  eq(ice.items.find((i) => /Idea/.test(i.label)).filled, false)
+})
+t('a filled history is asked nothing', () => {
+  const groups = M.historyGaps(M.buildKneeOsteoarthritisCase())
+  const unfilled = flat(groups).filter((i) => !i.filled)
+  ok(unfilled.length <= 3, `still asking for ${unfilled.map((i) => i.label).join(', ')}`)
+})
+t('it never suggests a diagnosis, an investigation or a treatment', () => {
+  const rec = M.createEmptyCase('SDH', 'x')
+  const text = M.historyGaps(rec).flatMap((g) => g.items).map((i) => `${i.label} ${i.prompt ?? ''}`).join(' ').toLowerCase()
+  for (const banned of ['chẩn đoán', 'phân biệt', 'nên dùng', 'kê', 'toa', 'điều trị', 'xét nghiệm', 'chỉ định', 'siêu âm', 'x-quang']) {
+    ok(!text.includes(banned), `the panel said "${banned}"`)
+  }
+})
+t('it only asks about what the level asks for', () => {
+  const y2 = M.historyGaps(M.createEmptyCase('Y2', 'x')).map((g) => g.title)
+  const sdh = M.historyGaps(M.createEmptyCase('SDH', 'x')).map((g) => g.title)
+  ok(!y2.includes('ICE'), 'Y2 was nagged about ICE, which its level does not require')
+  ok(sdh.includes('ICE'), 'SDH was not asked about ICE')
+})
+t('it reads the record and never writes to it', () => {
+  const rec = M.createEmptyCase('Y5', 'x')
+  const before = JSON.stringify(rec)
+  M.historyGaps(rec)
+  eq(JSON.stringify(rec), before, 'the gap finder mutated the record')
 })
 
 // --------------------------------------------------------- export file names

@@ -118,10 +118,14 @@ await shot('02-suggestions')
 
 const applied = await ev(`
   window.__btn('Đưa \\\\d+ mục vào bệnh án').click();
-  await new Promise((r) => setTimeout(r, 1800));
+  // The toast is read while it is still on screen; the record is read after
+  // the save has settled. Reading both at one moment made this flaky.
+  await new Promise((r) => setTimeout(r, 700));
+  const toast = window.__txt().match(/Đã bổ sung[^\\n]*/)?.[0] ?? '';
+  await new Promise((r) => setTimeout(r, 1400));
   const c = (await window.__cases()).find((x) => x.id === ${JSON.stringify(caseId)});
   return { severity: c.history.socrates.severity, site: c.history.socrates.site,
-           toast: window.__txt().match(/Đã bổ sung[^\\n]*/)?.[0] ?? '',
+           toast,
            status: c.quickNotes[0]?.processingStatus, source: c.quickNotes[0]?.source };
 `)
 check('accepted suggestions reach the record', applied.severity === '6/10', JSON.stringify(applied.severity))
@@ -136,6 +140,33 @@ const inbox = await ev(`
 `)
 check('the inbox keeps the fragment, with its source and status',
   inbox.title && inbox.source && inbox.badge, JSON.stringify(inbox))
+
+// ------------------------------------------------------------- gap finder
+console.log('\ngap finder')
+const gaps = await ev(`
+  const card = [...document.querySelectorAll('.card')].find((c) => /Gợi ý khai thác thêm/.test(c.innerText));
+  if (!card) return { shown: false };
+  const rows = [...card.querySelectorAll('.gap')];
+  return {
+    shown: true,
+    labelled: /không phải chẩn đoán hay khuyến nghị điều trị/.test(card.innerText),
+    groups: [...card.querySelectorAll('.section-title')].map((x) => x.textContent.trim()),
+    open: rows.filter((r) => r.dataset.filled === 'false').length,
+    done: rows.filter((r) => r.dataset.filled === 'true').length,
+    prompts: rows.filter((r) => /Có thể hỏi/.test(r.innerText)).length,
+    // Only the rows. The card's own disclaimer contains the words "chẩn đoán"
+    // and "điều trị" precisely in order to disclaim them.
+    rowText: rows.map((r) => r.innerText).join(' ').toLowerCase(),
+  };
+`)
+check('the panel shows what is still unasked', gaps.shown && gaps.open > 0, `${gaps.open} open`)
+check('it is labelled as elicitation, not clinical advice', gaps.labelled)
+check('it marks off what the fragment already answered', gaps.done > 0, `${gaps.done} answered`)
+check('each open item carries a question', gaps.prompts === gaps.open, `${gaps.prompts}/${gaps.open}`)
+check('it names no diagnosis, investigation or treatment',
+  !/chẩn đoán|xét nghiệm|điều trị|toa thuốc|siêu âm|chỉ định/.test(gaps.rowText ?? ''),
+  (gaps.rowText ?? '').slice(0, 60))
+await shot('06-gaps')
 
 // ---------------------------------------------------------------- B. conflict
 console.log('\nconflict, not overwrite')

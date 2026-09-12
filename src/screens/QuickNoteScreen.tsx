@@ -10,6 +10,7 @@ import { useVoiceCapture, voiceSupported } from '../hooks/useVoiceCapture'
 import { useAiStructuring } from '../hooks/useAiStructuring'
 import { SECTION_BY_ID } from '../config/sections'
 import { evaluateCompleteness } from '../completeness/engine'
+import { historyGaps } from '../completeness/gaps'
 import { Badge, Card, Checkbox, Chip, Notice } from '../components/Ui'
 import { Sheet } from '../components/Sheet'
 import { useToast } from '../components/Toast'
@@ -43,6 +44,7 @@ export function QuickNoteScreen({
 }) {
   const [draft, setDraft] = useState('')
   const [tab, setTab] = useState<'text' | 'voice'>('text')
+  const gaps = useMemo(() => historyGaps(record), [record])
   const [suggestions, setSuggestions] = useState<StructuringSuggestion[] | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [sourceNoteId, setSourceNoteId] = useState<string | null>(null)
@@ -354,6 +356,57 @@ export function QuickNoteScreen({
         ClerkMate <strong>đề xuất</strong> cách sắp xếp — bạn là người quyết định. Ứng dụng không tự điền
         thông tin lâm sàng mà bạn chưa khai thác.
       </Notice>
+
+      {/*
+        The loop's other half: having filed what was said, what is still worth
+        asking? Read off the empty boxes the learner's level asks for, with a
+        neutral question for each. It never proposes a diagnosis, never ranks
+        possibilities, and never fills anything in.
+      */}
+      {gaps.length > 0 && (
+        <Card
+          title="Gợi ý khai thác thêm"
+          hint="Dựa trên các mục còn trống của bệnh án ở mức của bạn — không phải chẩn đoán hay khuyến nghị điều trị."
+          className="card--flat"
+        >
+          <div className="stack">
+            {gaps.map((g) => (
+              <div key={g.title}>
+                <div className="section-title" style={{ marginBottom: 6 }}>
+                  {g.title}
+                </div>
+                <div className="stack stack--tight">
+                  {/*
+                    Capped, because a blank case has nineteen unanswered fields
+                    and a list that long stops being a prompt and becomes a
+                    wall. The count says what is behind it.
+                  */}
+                  {g.items.slice(0, 8).map((item) => (
+                    <div key={item.label} className="gap" data-filled={item.filled}>
+                      <span className="gap__mark" aria-hidden="true">
+                        {item.filled ? '✓' : '○'}
+                      </span>
+                      <div className="grow">
+                        <div style={{ fontSize: 13.5, fontWeight: item.filled ? 400 : 550 }}>
+                          {item.label}
+                        </div>
+                        {!item.filled && item.prompt && (
+                          <div className="tiny muted">Có thể hỏi: “{item.prompt}”</div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {g.items.length > 8 && (
+                  <p className="tiny muted" style={{ margin: '6px 0 0' }}>
+                    và {g.items.length - 8} mục khác — xem đầy đủ ở tab Hoàn chỉnh.
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {notes.length > 0 && (
         <Card title={`Ghi chú trong buổi khám (${notes.length})`} className="card--flat">
