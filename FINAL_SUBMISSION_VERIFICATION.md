@@ -1,7 +1,7 @@
 # ClerkMate — Final Submission Verification
 
-**Verified:** 11 September 2026, 09:55 (GMT+7)
-**Commit:** `108105a`
+**Verified:** 12 September 2026, 18:15 (GMT+7)
+**Commit:** `22af5f0`
 **Method:** every number below comes from a run on this date against the production build. Nothing
 here is quoted from an earlier run or inferred from source.
 
@@ -17,7 +17,7 @@ here is quoted from an earlier run or inferred from source.
 | Netlify | An earlier deployment exists but is **not** the submission target and was not redeployed |
 
 **The live bundle was compared against the local build**, not assumed: the page served from Pages
-references `assets/index-C_b4PIJ2.js`, byte-identical in name to the file produced by `npm run build`
+references `assets/index-DvoILeLZ.js`, byte-identical in name to the file produced by `npm run build`
 on this machine. What a judge opens is what passed the checks below.
 
 The deployment workflow runs `npm ci → npm test → npm run build → deploy`. A failing audit therefore
@@ -27,14 +27,20 @@ does not deploy: the URL keeps the previous good build rather than serving a bro
 
 | Suite | Command | Result |
 |---|---|---|
-| Rule audit | `npm test` | **77 / 77** |
+| Rule audit | `npm test` | **96 / 96** |
 | End-to-end, real Chrome | `npm run verify:app` | **104 / 104** |
+| Quick Capture | `npm run verify:capture` | **29 / 29** |
 | Print and PDF | `npm run verify:print` | **49 / 49** |
 | Local learner profiles | `npm run verify:profiles` | **14 / 14** |
 
-**244 checks, all passing.** The last three drive a real Chrome over the DevTools Protocol against
+**292 checks, all passing.** The last four drive a real Chrome over the DevTools Protocol against
 the built site served from a repository subpath — the same shape as GitHub Pages — not a test
 renderer or a mock.
+
+One thing worth saying about the audit itself: its runner used to call check bodies without awaiting
+them, so every asynchronous check printed a tick and then failed *after* the summary. It was found
+while adding the Quick Capture scenarios — five of them were reporting green while actually failing.
+The runner now has a separate awaited form, and the twelve capture checks are real.
 
 What the suites actually prove, rather than merely exercise:
 
@@ -65,7 +71,28 @@ What the suites actually prove, rather than merely exercise:
 `src/workflow/privacy.ts` is the only place that decides what may leave the device, and it **fails
 closed**: a record too old to carry the field, or malformed for any other reason, exports nothing.
 
-## 4. What the learner hands in
+## 4. How a record gets written
+
+**Capture, then confirm.** At the bedside the learner types shorthand or holds a button and talks;
+each fragment is stored, structured into suggestions that quote the text they came from, and nothing
+reaches the record until the learner ticks it. Afterwards a panel says which fields are still empty
+at their level and gives a plain question for each.
+
+| | |
+|---|---|
+| Capture modes | typed shorthand · push-to-talk dictation |
+| Structuring targets | **40**, including all eight SOCRATES elements |
+| Targets reaching diagnosis, management or investigations | **none** — swept by a check |
+| Provenance | every suggestion quotes text that must occur in the fragment |
+| Negation | "không / ko / k / chưa" produce explicit negatives; silence produces nothing |
+| Conflicts | shown with both values, never preselected, never auto-resolved |
+
+Dictation uses the browser's own recogniser — no dependency, no model, no endpoint. **The audio does
+leave the device**: Chrome sends it to Google, Safari to Apple. The app says exactly that, naming the
+vendor, before the microphone is opened for the first time, and Firefox is told plainly that it has
+no recogniser.
+
+## 5. What the learner hands in
 
 **A PDF.** Preview → *Xuất PDF* → send it to faculty over email, Zalo, an LMS or Drive. Faculty
 install nothing and hold no account; the product delivers its value without requiring their adoption.
@@ -83,7 +110,7 @@ Two exports exist:
 A portable `.json` exists for backup, device-to-device transfer and technical audit. It is **not** the
 submission route and the app says so.
 
-## 5. Honest limitations
+## 6. Honest limitations
 
 These are things the app cannot do, stated so that no one discovers them during judging.
 
@@ -100,20 +127,26 @@ These are things the app cannot do, stated so that no one discovers them during 
   off, and page-level offline emulation does not reach a service worker's own fetches.
 - **Two fields of the paper form have no counterpart in the record** (*Vú*, and the follow-up sheet's
   repeat vitals); they print as empty cells rather than being filled with something invented.
+- **Dictation is not on-device** and needs a network. Firefox has no recogniser at all. Typed capture
+  works offline in every browser, and a failed transcription never loses the fragment.
+- **Suggestions are not persisted.** They live in the review sheet; closing it means structuring the
+  fragment again, which costs a tap and no data.
+- **The gap panel prompts for fields, not for clinical thinking.** It cannot tell a learner what to
+  suspect, and is not meant to.
 
-## 6. Scale
+## 7. Scale
 
 | | |
 |---|---|
-| Source | 77 TypeScript/TSX files, ~19,000 lines |
+| Source | 79 TypeScript/TSX files, ~20,000 lines |
 | Runtime dependencies | **2** — `react`, `react-dom` |
-| Build output | 9 static files, 577 KB of JavaScript |
+| Build output | 9 static files, 595 KB of JavaScript |
 | Completeness catalogue | 66 requirements, mapped per level with inheritance |
 | Risk catalogue | 9 domains, **57** factor definitions |
 | Processing states | 8, five of them derived from the record's own content |
 | Mandatory items by level | Y2 8 · Y5 22 · Y6 34 · SDH 54 |
 
-## 7. Reproducing this
+## 8. Reproducing this
 
 ```bash
 npm ci
@@ -121,15 +154,16 @@ npm test
 npm run build
 npx serve dist        # or any static server at a /clerkmate-yhgd/ subpath on :4191
 npm run verify:app
+npm run verify:capture
 npm run verify:print
 npm run verify:profiles
 ```
 
-The three browser suites need Google Chrome at the standard macOS path and a static server on
+The four browser suites need Google Chrome at the standard macOS path and a static server on
 `http://localhost:4191/clerkmate-yhgd/`. `VERIFY_BASE=<url> npm run verify:app` points the same suite
 at the deployed site.
 
-## 8. Status
+## 9. Status
 
-**READY FOR SUBMISSION.** 244 checks passing on commit `108105a`, deployed, and the live bundle
+**READY FOR SUBMISSION.** 292 checks passing on commit `22af5f0`, deployed, and the live bundle
 confirmed identical to the verified build.

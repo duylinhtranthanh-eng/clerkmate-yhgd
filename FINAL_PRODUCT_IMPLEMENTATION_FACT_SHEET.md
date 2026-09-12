@@ -1,27 +1,25 @@
 # ClerkMate — Final Product Implementation Fact Sheet
 
-> ## ⚠️ Read this first
+> ## Read this first
 >
-> **The body of this document was verified on 10 September 2026 and the product changed
-> substantially on 11 September.** Sections 1–4 below have been corrected; **everything after §4 still
-> describes the 10 September build** and must be re-checked before being quoted.
+> **Re-checked against the code on 12 September 2026** at commit `22af5f0`. The sections the
+> 11–12 September work changed have been rewritten from the code and from that day's test runs:
+> §12 (storage and multiple local profiles), §14 (Quick Capture, replacing Quick Note), §14b (the
+> gap finder), §15 (the local parser and negation), §19 (the level map), §23 (the attachment
+> derivative rule), §24 (the print path), §25 (the department's form), §28 (**grading removed**),
+> §34 (how to reproduce), §31 (known bugs — three of the nine were fixed and are listed as such),
+> §33 (deployment — it said no repository existed) and the CLAIM · STATUS · EVIDENCE table.
 >
-> What changed on 11 September, none of which the body reflects:
+> **Sections not listed above still date from 10 September.** They describe parts nothing has
+> touched since — the tech stack, the backend and AI status, the PWA, the genogram, the risk review,
+> the examination, backup and restore, the demo cases, §30 and §32 — but they have not been
+> re-observed running on this commit, and that distinction is the point of this document.
 >
-> - The PDF is now **the department's own four-page paper form**, filled in. The old twenty-one
->   section report is kept as a second export.
-> - **The grading interface was removed.** No `#/cham-bai`, no faculty screen. The eight processing
->   states and the submission lock remain.
-> - **Attachments must produce a sanitized derivative** before anything can be exported; clinical
->   photos must answer whether a face is visible, and a declared face blocks the image.
-> - **Several local learner profiles** can share one device, each with its own case list.
-> - The level map moved: **APGAR and SCREEM are required from Y2, the genogram from Y5**, and
->   management and follow-up are what SDH adds. Mandatory counts are now Y2 8 · Y5 22 · Y6 34 · SDH 54.
-> - Test counts are now **77 / 104 / 49 / 14**, not 55 / 100 / 27.
->
-> For numbers that are current, use `FINAL_SUBMISSION_VERIFICATION.md`, verified 11 September.
+> For the current test figures and the live URL, `FINAL_SUBMISSION_VERIFICATION.md` is verified end
+> to end on this commit.
 
-**Verified:** body 10 September 2026; header and §1–§4 corrected 11 September 2026.
+**Verified:** §12, §14, §14b, §15, §19, §23–§25, §28, §31, §33, §34 and the claims table on
+12 September 2026; the remaining sections on 10 September 2026.
 **Method:** every line was checked against the code in `src/`, and where marked *verified* it was also
 observed running in a real Chrome against the production build served from a repository subpath.
 
@@ -135,10 +133,19 @@ retries.
 ## 12. Local storage
 
 **IMPLEMENTED.** IndexedDB `clerkmate` v1, three stores: `cases` (keyPath `id`, index `updatedAt`),
-`blobs` (attachment bytes), `meta` (learner profile, preferences). Autosave on a 450 ms debounce plus
+`blobs` (attachment bytes and their sanitized derivatives), `meta` (the learner-profile list, the
+active profile id, preferences). Autosave on a 450 ms debounce plus
 a flush on `pagehide`/`visibilitychange`; no manual save anywhere. `requireExisting` stops a late
 flush resurrecting a deleted case. **Not encrypted.** Schema migration merges a stored record onto a
 fresh blank one (verified: a record with no `submission` block still opens; an existing one is kept).
+
+**Several learners can share one device.** Each profile has an id, each case an `ownerProfileId`, and
+the home list shows only the active profile's records. The migration from the single-profile shape is
+written so it cannot lose work: it runs once, writes nothing to a case but the owner it never had, and
+a case that somehow has no owner is shown to whoever is looking rather than filtered into invisibility.
+Verified against a planted copy of the old storage — ids kept, cases adopted, second run a no-op
+(`npm run verify:profiles`, 14 checks). This is **separation, not authentication**: anyone holding the
+device can switch profiles, and the app says so where profiles are managed.
 
 ## 13. PWA
 
@@ -147,22 +154,58 @@ resolve to `/<repo>/`, three icons resolve inside the subpath and load 200. Inst
 (Share → Add to Home Screen) and Android. A new build never takes over mid-session: the page offers
 “Đã có bản cập nhật — Tải lại”.
 
-## 14. Quick Note
+## 14. Quick Capture — typed and spoken
 
-**IMPLEMENTED.** Free-text notepad; save as draft; saved notes listed newest-first with per-note
-re-parse and delete, badged with the sections they were filed into. Two sample notes. Disabled with
-a stated reason when the case is locked.
+**IMPLEMENTED, verified in the browser (`npm run verify:capture`, 29 checks).**
+
+Two capture modes feeding one pipeline. **Gõ**: a notepad for clinical shorthand. **Nói**:
+push-to-talk dictation whose transcript is editable *before* structuring, with the original kept
+separately — a recogniser mishears, and the correction must not erase what the machine actually
+heard.
+
+Each capture is a **fragment**: `source` (text/voice), `originalText`, the working text,
+`transcriptionStatus`, `processingStatus`. The inbox — *Ghi chú trong buổi khám* — lists them newest
+first with their source, a status badge (chưa sắp xếp · có đề xuất · đã đưa một phần · đã sắp xếp ·
+cần xem lại), and the sections they were filed into. Fragments are never auto-deleted after applying.
+Both modes are closed with a stated reason when the case is locked (asserted).
+
+Notes written before fragments existed migrate without loss: id, text and `filedInto` are preserved,
+`originalText` starts equal to the text, and a note that had been filed is read as already applied.
+
+## 14b. Gap finder — *Gợi ý khai thác thêm*
+
+**IMPLEMENTED, schema-first.** Reads the empty boxes the learner's level asks for and nothing else:
+the eight SOCRATES elements one at a time with a tick against those already answered, ICE element by
+element, then the unmet requirements a learner can close **by asking**. Each open field carries a
+neutral question ("Cơn đau có lan đi đâu không?").
+
+Bounded by checks, not by intention: nine forbidden words (chẩn đoán, xét nghiệm, điều trị, toa
+thuốc, …) are swept out of every row; a Y2 is not prompted about ICE because their level does not ask
+for it; and the record is compared before and after to prove the panel only reads. It cannot say what
+a patient might have, and is not meant to.
 
 ## 15. Local parser
 
 **IMPLEMENTED, deterministic, and the default.** `src/parsing/heuristicStructurer.ts`: diacritic-
 insensitive normalisation, clause splitting, regex extraction, negation detection, duplicate
-detection against the current record. **Not AI.** 28 target fields; dictionaries of 54 conditions,
-15 drugs, 9 relations, 19 occupations, 14 red-flag patterns. Verified: every suggestion carries a
-snippet, every target has an applier, origin stamped `local`.
+detection against the current record. **Not AI.** **40 target fields**, including **all eight
+SOCRATES elements**; dictionaries of 54 conditions, 15 drugs, 9 relations, 19 occupations, 14
+red-flag patterns.
 
-Does **not** touch: visit fields, SOCRATES, examination systems, investigations, diagnosis,
-management, prevention, follow-up, reflection, genogram layout, or any risk factor.
+Verified: every suggestion carries a snippet **that must occur in the fragment's own text**, every
+target has an applier, origin stamped `local`. The five acceptance scenarios are checks in
+`npm test`: typed shorthand reaching five boxes, a transcript yielding negatives and ICE, medication
+with an explicit negative allergy, a note about a knee producing **no** claim about allergy, smoking,
+fever or red flags, and a second severity value raised as a conflict rather than an overwrite.
+
+**Negation.** `không · ko · k · chưa · phủ nhận · chưa ghi nhận · không có` are read as negatives.
+Silence is not: a note that never mentions allergy produces nothing about allergy. An explicit
+"không dị ứng thuốc" sets the form's *đã hỏi, không ghi nhận* flag — it used to file an allergy entry
+named "Chưa ghi nhận", which a reader of the printed record would have taken for a real allergy.
+
+Does **not** touch: examination systems, investigations, diagnosis, differential, clinical reasoning,
+management, prescription, referral, prevention, follow-up, reflection, genogram layout, or any risk
+factor. Asserted by a check that sweeps the whole target catalogue.
 
 ## 16. AI parser
 
@@ -217,10 +260,18 @@ blocker; the gate raises both (verified).
 
 | Level | Requirements | Mandatory | Recommended | Advanced |
 |---|---|---|---|---|
-| Y2 — Tiền lâm sàng | 15 | 6 | 5 | 4 |
-| Y5 — Lâm sàng YHGĐ | 38 | 19 | 14 | 5 |
-| Y6 — Thực hành tổng hợp | 59 | 31 | 21 | 7 |
-| SDH — Sau đại học | 66 | 50 | 13 | 3 |
+| Y2 — Tiền lâm sàng | 17 | 8 | 5 | 4 |
+| Y5 — Lâm sàng YHGĐ | 41 | 22 | 14 | 5 |
+| Y6 — Thực hành tổng hợp | 60 | 34 | 21 | 5 |
+| SDH — Sau đại học | 66 | 54 | 9 | 3 |
+
+**Revised 11 September on the department's instruction.** Family APGAR and SCREEM are required
+**from Y2** — they are what makes this a family record rather than a short internal-medicine one;
+the genogram **from Y5**; and what SDH adds is **managing a case over time** (treatment goals,
+referral, review visits, treatment response, comorbidity control, continuity), not more boxes. Each
+assignment is pinned by a check, including one that sweeps all four levels to prove no level drops
+what the level below requires. Settings shows each level by what the learner must be able to do
+rather than by a count.
 
 Each level covers everything the level below covers (asserted). Gender rule verified (reproductive
 history applies to a female patient, not a male one). Age rule verified (cardiovascular risk applies
@@ -262,11 +313,25 @@ normal.
 
 ## 23. Attachments
 
-**IMPLEMENTED.** Camera or library, multiple files, 5 categories, per-image title/date/category/note,
-client-side thumbnails. Two independent flags (`redacted`, `privacyChecked`); an unprocessed image is
-tagged red on the thumbnail, warned about on the attachments screen and on the export screen, and
-listed with its status in the PDF. A photographed result can be attached to the specific result row.
-**No OCR** — values are typed. All six blob write paths are lock-guarded (§27).
+**IMPLEMENTED.** Camera or library, multiple files, **6 categories** (including `clinical_photo`),
+per-image title/date/category/note, client-side thumbnails, neutral filenames on import. A
+photographed result can be attached to the specific result row. **No OCR** — values are typed. All
+six blob write paths are lock-guarded (§27).
+
+**Nothing is exported as picked.** Since 11 September an attachment must produce a *derivative*
+before it can leave the device, held under `sanitizedBlobKey`: either the redacted image, or a canvas
+re-encode made when the learner declares there are no identifiers. Both are re-encodes, so EXIF and
+GPS have nowhere to survive — there is no metadata-stripping step to get wrong. An attachment with no
+derivative is dropped from the printed images and its list entry says the image was withheld.
+
+**Clinical photos** answer one extra question before the camera opens and again in the viewer: is a
+face visible? A declared face **blocks the image** — it cannot be redacted or declared clean, and is
+withdrawn from every export path. Blurring is not offered, because a blurred face is still a
+photograph of a person that was taken and stored; the app asks for a crop or a retake. An unanswered
+face question also blocks, so silence is not a way through.
+
+`src/workflow/privacy.ts` is the single gate and it **fails closed**: a record too old to carry the
+field exports nothing. Deleting a case or an image deletes both blobs; a backup carries both.
 
 ## 24. Redaction
 
@@ -284,7 +349,9 @@ mobile-emulated browser with genuine pointer events: a box can be created, moved
 | Covered region is solid black at full resolution | ✅ >90% pure black in the sampled band of the stored image |
 | Thumbnail regenerated | ✅ |
 | Flags set to redacted + privacy-checked | ✅ |
-| Preview and PDF use the redacted image | ✅ printed thumbnail byte-matches the stored redacted thumbnail |
+| Preview and PDF use the sanitized derivative | ✅ printed image is a `blob:` URL at 760×560 — the derivative, not the 320 px list thumbnail |
+| The image is printed whole | ✅ natural proportions kept; the square `object-fit: cover` frame that cropped the head and foot off a portrait lab slip is gone |
+| An image with no derivative prints nothing | ✅ zero images in the printed grid, and the list says it was withheld |
 | Backup and restore preserve the redacted image | ✅ SHA-256 identical after a wipe-and-restore |
 | Submission blocker detects an unconfirmed attachment | ✅ named blocker, submit disabled |
 
@@ -293,7 +360,23 @@ hatch exists for images that genuinely carry no identifiers.
 
 ## 25. PDF
 
-**IMPLEMENTED — a real sample was generated and inspected (27/27 checks).** No PDF library: the
+**IMPLEMENTED — a real sample was generated and inspected page by page (49/49 checks).**
+
+Since 11 September the primary export is **the department's own four-page form, filled in**
+(`src/export/DepartmentForm.tsx`), reproduced from `docs/reference/mau-benh-an-yhgd.pdf`: masthead
+and administrative block, the seven vitals columns, history against red flags and ICE, the
+seventeen-row problem table beside the six-row family-history table, the ten organ systems filling
+their column the way the paper does, the follow-up sheet with its fourteen-row investigation table,
+the genogram page and the twelve-row screening schedule. Four official pages on four A4 sheets, plus
+a fifth sheet for attachments — which have no cell on the paper form, so they are labelled as an
+addition rather than smuggled in. **Empty cells stay**: an empty box on an official form means "not
+recorded", which is information.
+
+Verified by rendering the pages to PNG and comparing them against the scan by eye, not only by
+asserting the DOM. The learning report (`CaseDocument.tsx`) is kept as the second export, because
+self-assessment and the completeness picture have nowhere to live on the department's form.
+
+No PDF library: the
 browser print pipeline plus `print.css`.
 
 Verified in print media: top bar, tab bar and all `.no-print` blocks hidden; watermark and footer
@@ -357,23 +440,21 @@ Verified in the browser on a locked case:
   resubmission; editing works again immediately afterwards.
 - Reopen count and the full feedback history are printed in the PDF.
 
-## 28. Teacher grading
+## 28. Teacher grading — **REMOVED 11 September**
 
-**IMPLEMENTED, without authentication — and it says so.**
+**NOT IMPLEMENTED.** The grading interface was deleted on the department's instruction: there is no
+`#/cham-bai`, no faculty screen, and no way to import a returned file. The learner's flow ends at the
+PDF, which faculty read with the tools they already use. A check asserts the absence: typing the old
+route renders nothing and Home offers no grading entry point.
 
-The reviewer opens the learner's bundle at `#/cham-bai` in the same app: learner identity, submission
-code, completeness, missing mandatory items, reopen count, and the whole record read-only. They type
-a name and a comment and choose *Trả lại để bổ sung* (comment required) or *Chấp nhận*; the app
-writes the decision into the record and downloads the result. **Nothing is stored on the reviewer's
-device.** The learner imports the returned file; **only the submission block is merged**, so a
-reviewer cannot alter clinical content (asserted by `npm test` against a deliberately tampered file).
-A returned case is badged, announced, shown the comment verbatim, and unlocked. Feedback history
-survives multiple rounds.
+What remains is learner-side and still tested: **eight processing statuses**, five derived from the
+record's own content, and the optional lock that marks which version was handed in.
 
-**Eight statuses**, five derived from the record's own content. A reviewer's decision governs the
-badge until the learner answers it, tracked **by review id, not by timestamp** — the two sides are
-different devices with their own clocks, and this bug (a reviewer whose clock ran slow having their
-decision silently ignored) was caught by `npm test` and fixed.
+The two review-derived statuses are still in the machine and still keyed **by review id, not by
+timestamp** — a bug caught by `npm test` when the feature existed (a reviewer whose clock ran slow
+had their decision silently ignored). With no way to receive a review they are now unreachable
+through the interface; they were kept rather than removed so that the eight-state answer in the
+competition form stays true and the state machine keeps its tests.
 
 ## 29. Demo cases
 
@@ -408,25 +489,35 @@ real document. Each carries the line *“Ảnh mô phỏng dùng cho demo ClerkM
 
 ## 31. Known unresolved bugs
 
-The two serious bugs found on 09/09/2026 were fixed and re-verified on the deployed build; a third
-was found by the new test suite on 10/09/2026 and fixed. What remains is cosmetic or dormant:
+Re-checked 12/09/2026. What remains is cosmetic or dormant:
 
 | # | Issue | Severity |
 |---|---|---|
 | 1 | Genogram life-cycle button says “Ẩn danh sách 8 giai đoạn” while the list holds 10 | cosmetic |
-| 2 | `patient.dateOfBirth` and `managementPlan.referral.urgency` are editable but never printed | minor |
-| 3 | Dead model fields with no UI: `patient.phone`, `reproductive.gravida` / `.abortions` / `.livingChildren`, `quickNote.archived` | minor, inflates any field count taken from the types |
-| 4 | Reflection “Từ khóa” hints at finding cases later, but no search or filter exists anywhere | minor, misleading copy |
-| 5 | `#/case/<id>/s/genogram` renders a fallback string; both in-app links route to the tab instead | cosmetic, URL-only |
-| 6 | Long names are truncated in genogram labels (“Bà H. (giả lộ…”) to avoid collisions | cosmetic, by design |
-| 7 | The attachment thumbnail in the PDF catalogue is cropped by the 3-column grid | cosmetic |
-| 8 | CSS class `.doc` is used both by the printed article and by definition lists inside UI cards | code hygiene, no user impact |
+| 2 | `patient.dateOfBirth` is editable but never printed | minor |
+| 3 | `patient.phone` and `patient.familyCode` print on the department form but have no input of their own on the patient screen — `phone` is model-only until one is added | minor |
+| 4 | Dead model fields with no UI: `reproductive.gravida` / `.abortions` / `.livingChildren`, `quickNote.archived` | minor, inflates any field count taken from the types |
+| 5 | Reflection “Từ khóa” hints at finding cases later, but no search or filter exists anywhere | minor, misleading copy |
+| 6 | `#/case/<id>/s/genogram` renders a fallback string; both in-app links route to the tab instead | cosmetic, URL-only |
+| 7 | Long names are truncated in genogram labels (“Bà H. (giả lộ…”) to avoid collisions | cosmetic, by design |
+| 8 | Structuring suggestions are not persisted; closing the review sheet means structuring the fragment again | minor, costs a tap |
 | 9 | Deleting a submitted case is still allowed (the lock governs editing, not deletion) | by design, undocumented |
+| 10 | Printed text is 8 pt so a full postgraduate case fits one sheet per official page — smaller than the 9–11 pt a form of this kind usually uses | deliberate trade-off |
 
-**Fixed on 10/09/2026:** all six attachment blob write paths bypassed the submission lock (redacting
-an image on a submitted case would have overwritten its pixels irreversibly); the status machine
-compared two devices' clocks; the demo attachment note contradicted its own privacy status in the
-exported PDF.
+**Fixed 10/09:** all six attachment blob write paths bypassed the submission lock (redacting an image
+on a submitted case would have overwritten its pixels irreversibly); the status machine compared two
+devices' clocks; a demo attachment note contradicted its own privacy status in the exported PDF.
+
+**Fixed 11/09:** the PDF filename carried the patient's name; attachments were exported as picked,
+metadata and all; the printed attachment was cropped by a square grid and came from a 320 px
+thumbnail; `mailto:` was implied to attach a file.
+
+**Fixed 12/09:** an explicit “không dị ứng thuốc” was filed as an allergy entry named “Chưa ghi
+nhận”, which a reader of the printed record would have taken for a real allergy; the sex and age
+suggestions quoted diacritic-stripped text, so the learner was shown “nu” for what they wrote as
+“Nữ”; a second value in a one-answer field silently overwrote the first; **and the audit runner did
+not await asynchronous checks, so every one of them printed a tick and failed after the summary** —
+found because five new checks reported green while actually failing.
 
 ## 32. Privacy limitations
 
@@ -447,17 +538,19 @@ exported PDF.
 
 ## 33. Deployment limitations
 
-- **GitHub Pages is not live yet** — no repository exists. Everything needed is in place and was
-  verified against the Pages hosting shape locally; §34 lists the commands.
+- **Live on GitHub Pages** since 11/09: https://duylinhtranthanh-eng.github.io/clerkmate-yhgd/ —
+  deployed by Actions on push to `main`, and the served bundle was compared against the local build
+  rather than assumed.
 - GitHub Pages serves static files only, so **AI mode cannot work there**. It degrades correctly:
-  the probe 404s, the app reports “chưa cấu hình” and hides the option.
-- Netlify remains the only host that can run the AI proxy, and the only one that sends the
-  Content-Security-Policy headers.
-- The Pages workflow needs one manual step in the repository UI: **Settings → Pages → Source:
-  GitHub Actions**. No token or secret is required.
+  the probe 404s, the app reports “chưa cấu hình” and hides the option. The local parser is the
+  default and needs no network.
+- Netlify remains the only host that could run the AI proxy, and the only one that sends the
+  Content-Security-Policy headers. It was **not** redeployed and is not the submission target.
+- Voice dictation needs a network and a browser with a recogniser (Chrome, Safari; not Firefox), and
+  the audio goes to that browser's vendor. Typed capture works offline everywhere.
 - No licence has been chosen; until one is added the code is not licensed for reuse.
-- `netlify-cli` is a heavy devDependency and carries 5 high-severity advisories through `sharp`.
-  **Runtime dependencies have 0 advisories.** CI installs it needlessly.
+- `netlify-cli` was **removed** from devDependencies on 10/09 — its `sharp` tree carried 5
+  high-severity advisories and broke `npm ci` in CI. The project now reports **0 advisories**.
 
 ---
 
@@ -469,13 +562,22 @@ exported PDF.
 | “Stores data locally, no cloud” | **VERIFIED** | IndexedDB only; zero network requests across a full end-to-end run in core mode; every request that did occur stayed on the origin |
 | “No login, no account” | **VERIFIED** | No password field, session or token anywhere; first run asks only for a name and an id and says it is not a login |
 | “Installable PWA” | **VERIFIED** | Service worker active, scope `/<repo>/`, 9 precached files all inside the subpath, manifest `start_url`/`scope`/3 icons resolve and load, `display: standalone` |
-| “Quick notes become a structured record” | **VERIFIED** | Local parser returns >3 suggestions on the sample note, each with a source snippet; 28 target fields; nothing written before confirmation |
+| “Quick notes become a structured record” | **VERIFIED** | Local parser returns >3 suggestions on the sample note, each with a source snippet; **40** target fields; nothing written before confirmation |
+| “Capture by typing or by talking” | **VERIFIED** | Both modes offered and driven in a browser; a transcript is editable before structuring and the original is kept; a locked case refuses both (29 checks) |
+| “Voice runs on the device” | **NOT CLAIMED — and explicitly denied** | The browser's recogniser sends audio to Google (Chrome) or Apple (Safari). The app names the vendor before the microphone opens; `canShareFile()`/the notice record this in source |
+| “What was never said stays unsaid” | **VERIFIED** | A note about a knee produces no claim about allergy, smoking, fever or red flags; “không dị ứng” sets the asked-and-none flag rather than filing an allergy |
+| “Contradictions are surfaced, not resolved” | **VERIFIED** | A second severity value shows both readings, is never preselected, and leaves the record untouched when declined |
+| “The gap panel does not give clinical advice” | **VERIFIED** | Nine forbidden words swept from every row; Y2 not prompted for ICE; record byte-identical before and after |
 | “Suggestions always show their source” | **VERIFIED** | Every suggestion card carries a `.snippet`; AI suggestions with no quote, or a quote absent from the note, are discarded |
-| “Completeness checked by learner level” | **VERIFIED** | 15/38/59/66 requirements with 6/19/31/50 mandatory; weighted formula reproduced; conditional rules for sex, age, attachments and results |
+| “Completeness checked by learner level” | **VERIFIED** | 17/41/60/66 requirements with 8/22/34/54 mandatory; weighted formula reproduced; conditional rules for sex, age, attachments and results |
 | “Previewing another level does not change the case” | **VERIFIED** | Record unchanged byte-for-byte across all four previews; declared level stays SDH |
 | “Genogram is generated, not drawn by hand” | **VERIFIED** | Deterministic layout; renders as vector SVG in the exported PDF with the condition legend |
 | “Redacts identifiers destructively” | **VERIFIED** | Same blob key, different SHA-256, one blob in the store, >90% pure black in the sampled band at full resolution, and the same redacted bytes in preview, PDF, backup and restore |
-| “Submission locks editing” | **VERIFIED** | 17 sections + 4 tabs swept with 400+ mutation attempts, all six blob paths guarded, and enforcement holds with the UI forced open |
+| “Only a sanitized copy ever leaves the device” | **VERIFIED** | An attachment with no derivative prints nothing and is listed as withheld; the printed image is the derivative at full resolution; the gate fails closed on malformed records |
+| “The PDF is the department's own form” | **VERIFIED** | Four pages rendered to PNG and compared against the scan; blocks, order and wording match; empty official cells are kept |
+| “Submission locks editing” | **VERIFIED** | 18 sections + 4 tabs swept with 400+ mutation attempts, all six blob paths guarded, and enforcement holds with the UI forced open |
+| “Faculty can grade inside the app” | **NO LONGER TRUE — feature removed** | The grading screen and its route were deleted on 11 September; a check asserts the route renders nothing and Home offers no entry point. The PDF is the handoff |
+| “The app can share the PDF file” | **NOT CLAIMED** | The browser's print pipeline hands the file to the operating system, never to the page, so there is no Blob to share; `mailto:` cannot attach a local file either, and the email button says so |
 | “Reopening is recorded and visible” | **VERIFIED** | Reopen count stored, submitted stamp cleared, count printed in the PDF |
 | “Backup restores attachments” | **VERIFIED** | Export → both stores wiped → restore: cases byte-identical, attachment SHA-256 identical, redacted state and submission metadata preserved |
 | “Teacher can return work with a comment” | **VERIFIED** | Full round trip: bundle → grading screen → returned file → import → badged, announced, comment verbatim, unlocked |
@@ -497,19 +599,20 @@ exported PDF.
 
 ```bash
 npm ci
-npm test                 # 55 rule checks, no browser needed
+npm test                 # 96 rule checks, no browser needed
 npm run build            # production build
 
-# 100 end-to-end checks, served from a repository subpath (the GitHub Pages shape)
+# served from a repository subpath — the GitHub Pages shape — on :4191
 npm run preview:pages &
-npm run verify:app
 
-# 27 print checks plus a real sample PDF written to /tmp/clerkmate-print/
-npm run preview:pages &
-npm run verify:print
+npm run verify:app       # 104 end-to-end checks
+npm run verify:capture   # 29 Quick Capture checks, screenshots to /tmp/clerkmate-capture/
+npm run verify:print     # 49 print checks plus a real PDF to /tmp/clerkmate-print/
+npm run verify:profiles  # 14 local-profile and migration checks
 ```
 
-All three harnesses are committed: `scripts/audit.mjs`, `scripts/verify/verify-final.mjs` and
-`scripts/verify/verify-print.mjs`. They need nothing but Node and a local Chrome — no test framework
+**292 checks in total.** All five harnesses are committed: `scripts/audit.mjs`,
+`scripts/verify/verify-final.mjs`, `scripts/verify/verify-capture.mjs`,
+`scripts/verify/verify-print.mjs` and `scripts/verify/verify-profiles.mjs`. They need nothing but Node and a local Chrome — no test framework
 and no extra dependency. `scripts/verify/stub-provider.mjs` and `scripts/verify/aitest-server.mjs`
 exercise the AI proxy end to end without a real provider key.
