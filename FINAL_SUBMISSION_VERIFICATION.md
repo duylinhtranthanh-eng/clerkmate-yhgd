@@ -1,9 +1,10 @@
 # ClerkMate — Final Submission Verification
 
-**Verified:** 12 September 2026, 18:15 (GMT+7)
-**Commit:** `22af5f0`
-**Method:** every number below comes from a run on this date against the production build. Nothing
-here is quoted from an earlier run or inferred from source.
+**Verified:** 5 October 2026, 22:30 (GMT+7)
+**Commit:** `66e98fc`
+**Method:** every number below comes from a run on this date against the production build, served
+with the deployment's own response headers. Nothing here is quoted from an earlier run or inferred
+from source.
 
 ---
 
@@ -196,5 +197,6 @@ than production.
 
 ## 9. Status
 
-**READY FOR SUBMISSION.** 329 checks passing on commit `22af5f0`, deployed, and the live bundle
-confirmed identical to the verified build.
+**READY FOR SUBMISSION.** 329 checks passing on commit `66e98fc`. The competition build deployed and
+confirmed identical was `22af5f0`; everything since — the submission documents, the record gaps,
+at-rest encryption and reading a result slip — is verified here but **not yet deployed**.
