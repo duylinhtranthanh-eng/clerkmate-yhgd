@@ -2,7 +2,14 @@ import { useEffect, useState } from 'react'
 import type { LearnerLevel } from '../types/case'
 import { LEVELS, LEVEL_ORDER, resolveLevelRequirements } from '../config/levels'
 import { REQUIREMENT_BY_ID } from '../config/requirements'
-import { exportBackup, importBackup } from '../db/repository'
+import {
+  disableVault,
+  enableVault,
+  exportBackup,
+  importBackup,
+  vaultState,
+} from '../db/repository'
+import type { VaultState } from '../db/repository'
 import { triggerDownload } from '../export/exportPdf'
 import { Badge, Card, Chip, Field, Notice, TextInput } from '../components/Ui'
 import { TopBar } from '../components/TopBar'
@@ -314,21 +321,191 @@ export function SettingsScreen({ back }: { back: () => void }) {
           </p>
         </Card>
 
+        <VaultCard />
+
         <Card title="Về ClerkMate">
           <p className="small">
             <strong>ClerkMate</strong> — “Từ ghi chú nhanh đến bệnh án hoàn chỉnh.” Công cụ học tập ghi nhận
             bệnh án Y học gia đình trên điện thoại.
           </p>
           <Notice tone="info">
-            Phiên bản MVP: không tài khoản, không máy chủ lưu dữ liệu. Bệnh án nằm trên máy bạn.
-            Không có OCR, không nhận dạng giọng nói, <strong>không gợi ý chẩn đoán hay điều trị bằng
-            AI</strong>.
+            Phiên bản MVP: không tài khoản, không máy chủ lưu dữ liệu. Bệnh án nằm trên máy bạn, và{' '}
+            <strong>không có gợi ý chẩn đoán hay điều trị bằng AI</strong>.
             {ai.allowAi
               ? ' Bạn đang cho phép dùng AI để sắp xếp ghi chú: ở chế độ đó, nội dung ghi chú được gửi ra dịch vụ AI để đề xuất cách sắp xếp, và chỉ khi bạn tự chọn chế độ AI.'
-              : ' Đang ở chế độ cục bộ hoàn toàn: ứng dụng không gửi dữ liệu đi đâu.'}
+              : ' Ghi chú và bệnh án không được gửi đi đâu.'}
+          </Notice>
+
+          {/*
+            Spelled out rather than summarised as "chạy cục bộ".
+
+            This card used to say the app had no speech recognition and no text
+            recognition. The first had not been true since dictation shipped, and
+            the second stopped being true when slip reading did. A learner
+            deciding whether to point a microphone at a consultation deserves the
+            actual answer, so both are named here with where the data goes.
+          */}
+          <Notice tone="warn">
+            Hai chỗ <em>có thể</em> gửi dữ liệu ra ngoài máy, và cả hai chỉ chạy khi bạn chủ động
+            dùng:
+            <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
+              <li>
+                <strong>Nhập bằng giọng nói</strong> dùng dịch vụ nhận dạng của trình duyệt (Google
+                với Chrome, Apple với Safari), nên <strong>âm thanh được gửi tới dịch vụ đó</strong>.
+                Ứng dụng nói rõ điều này trước khi bật micro.
+              </li>
+              <li>
+                <strong>Đọc phiếu xét nghiệm</strong> chạy ngay trên máy này: ảnh không được lưu vào
+                bệnh án và không gửi đi đâu. Chỉ khi bạn chọn “nhờ AI đọc lại” thì ảnh mới rời máy,
+                và ứng dụng hỏi lại trước khi gửi.
+              </li>
+            </ul>
           </Notice>
         </Card>
       </div>
     </>
+  )
+}
+
+
+/**
+ * Switching at-rest encryption on and off.
+ *
+ * Off by default, and it stays that way unless a learner chooses otherwise:
+ * most people trying ClerkMate are looking at simulated cases, and a password
+ * prompt in front of that is friction with nothing behind it. The ones who put
+ * real de-identified work on a shared clinic phone are the ones this is for.
+ *
+ * Everything the learner is about to lose control over is said before the
+ * switch, not after: no reset, and the backup file stays readable.
+ */
+function VaultCard() {
+  const toast = useToast()
+  const [state, setState] = useState<VaultState | null>(null)
+  const [opening, setOpening] = useState(false)
+  const [pw, setPw] = useState('')
+  const [pw2, setPw2] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    void vaultState().then(setState)
+  }, [])
+
+  if (state === null) return null
+
+  if (state === 'unavailable') {
+    return (
+      <Card title="Mã hoá dữ liệu trên thiết bị" className="card--flat">
+        <Notice tone="warn">
+          Trình duyệt này không hỗ trợ mã hoá (Web Crypto). Tính năng không dùng được ở đây.
+        </Notice>
+      </Card>
+    )
+  }
+
+  const enabled = state === 'open' || state === 'locked'
+
+  const turnOn = async () => {
+    if (pw.length < 8) {
+      toast('Mật khẩu cần ít nhất 8 ký tự.')
+      return
+    }
+    if (pw !== pw2) {
+      toast('Hai lần nhập mật khẩu chưa khớp.')
+      return
+    }
+    if (
+      !window.confirm(
+        'ClerkMate không có máy chủ, nên KHÔNG AI đặt lại được mật khẩu này — kể cả người viết ứng dụng. ' +
+          'Quên mật khẩu là mất toàn bộ bệnh án trên thiết bị này. Bạn đã ghi lại mật khẩu ở nơi an toàn chưa?',
+      )
+    ) {
+      return
+    }
+    setBusy(true)
+    try {
+      await enableVault(pw)
+      setPw('')
+      setPw2('')
+      setOpening(false)
+      setState(await vaultState())
+      toast('Đã mã hoá dữ liệu trên thiết bị này.')
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Không bật được mã hoá.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const turnOff = async () => {
+    if (!window.confirm('Tắt mã hoá? Bệnh án sẽ được lưu ở dạng đọc được như trước.')) return
+    setBusy(true)
+    try {
+      await disableVault()
+      setState(await vaultState())
+      toast('Đã tắt mã hoá.')
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Không tắt được mã hoá.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Card
+      title="Mã hoá dữ liệu trên thiết bị"
+      hint="Dành cho máy dùng chung. Mặc định tắt."
+      className="card--flat"
+    >
+      <div className="row-between" style={{ gap: 12 }}>
+        <div style={{ flex: 1 }}>
+          <strong style={{ fontSize: 14 }}>
+            {enabled ? 'Đang bật' : 'Đang tắt'}
+          </strong>
+          <p className="small muted" style={{ margin: '4px 0 0' }}>
+            {enabled
+              ? 'Bệnh án và ảnh được mã hoá khi lưu. Mở app lần sau sẽ phải nhập mật khẩu.'
+              : 'Bệnh án đang lưu ở dạng đọc được. Ai mở được trình duyệt này là đọc được.'}
+          </p>
+        </div>
+        {enabled ? (
+          <button type="button" className="btn btn--secondary btn--sm" disabled={busy} onClick={() => void turnOff()}>
+            Tắt
+          </button>
+        ) : (
+          <button type="button" className="btn btn--primary btn--sm" onClick={() => setOpening((v) => !v)}>
+            {opening ? 'Huỷ' : 'Bật'}
+          </button>
+        )}
+      </div>
+
+      {opening && !enabled && (
+        <div className="stack" style={{ marginTop: 12 }}>
+          <Notice tone="warn">
+            <strong>Không ai đặt lại được mật khẩu này.</strong> ClerkMate không có máy chủ. Quên là mất
+            toàn bộ bệnh án trên thiết bị này.
+          </Notice>
+          <Field label="Mật khẩu" help="Ít nhất 8 ký tự.">
+            <TextInput type="password" value={pw} onChange={(e) => setPw(e.target.value)} />
+          </Field>
+          <Field label="Nhập lại mật khẩu">
+            <TextInput type="password" value={pw2} onChange={(e) => setPw2(e.target.value)} />
+          </Field>
+          <button
+            type="button"
+            className="btn btn--primary btn--block"
+            disabled={busy || !pw || !pw2}
+            onClick={() => void turnOn()}
+          >
+            {busy ? 'Đang mã hoá…' : 'Mã hoá dữ liệu trên thiết bị này'}
+          </button>
+        </div>
+      )}
+
+      <Notice tone="info">
+        Đây là <strong>mã hoá dữ liệu lưu trên máy</strong>, không phải đăng nhập — nó không xác thực
+        bạn là ai. Tệp sao lưu vẫn ở dạng đọc được, vì nó phải khôi phục được trên máy khác.
+      </Notice>
+    </Card>
   )
 }

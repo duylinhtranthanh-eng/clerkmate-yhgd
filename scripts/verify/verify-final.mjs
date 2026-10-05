@@ -715,7 +715,11 @@ check('manifest start_url, scope and icons resolve inside the subpath',
   manifest.start === SUBPATH && manifest.scope === SUBPATH && manifest.icons === 3, JSON.stringify(manifest))
 check('manifest asks for a standalone install', manifest.display === 'standalone')
 
-console.log(REMOTE ? '\n  (going offline)' : '\n  (stopping the server)')
+console.log(
+  REMOTE
+    ? '\n  (going offline)'
+    : '\n  (stopping the server — it stays down, so run this suite last)',
+)
 if (!REMOTE) {
   // Locally the strongest proof is to take the server away entirely.
   try { execSync('lsof -ti tcp:4191 | while read p; do kill -9 $p; done') } catch {}

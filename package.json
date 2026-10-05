@@ -15,11 +15,17 @@
     "verify:print": "node scripts/verify/verify-print.mjs",
     "preview:pages": "vite preview --port 4191 --base /clerkmate-yhgd/ --strictPort",
     "verify:profiles": "node scripts/verify/verify-profiles.mjs",
-    "verify:capture": "node scripts/verify/verify-capture.mjs"
+    "verify:capture": "node scripts/verify/verify-capture.mjs",
+    "verify:vault": "node scripts/verify/verify-vault.mjs",
+    "verify:ocr": "node scripts/verify/verify-ocr.mjs",
+    "prebuild": "node scripts/sync-ocr-assets.mjs",
+    "predev": "node scripts/sync-ocr-assets.mjs",
+    "serve:dist": "node scripts/serve-dist.mjs"
   },
   "dependencies": {
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "tesseract.js": "^7.0.0"
   },
   "devDependencies": {
     "@types/node": "^26.5.0",

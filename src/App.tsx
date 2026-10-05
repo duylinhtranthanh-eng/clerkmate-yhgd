@@ -1,7 +1,8 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { ToastProvider, useToast } from './components/Toast'
 import { ProfileProvider, useProfile } from './hooks/useProfile'
 import { OnboardingScreen } from './screens/OnboardingScreen'
+import { UnlockScreen } from './screens/UnlockScreen'
 import { isProfileComplete } from './types/profile'
 import { TopBar } from './components/TopBar'
 import { TabBar } from './components/TabBar'
@@ -17,6 +18,7 @@ import { SECTION_BY_ID } from './config/sections'
 import { useAppUpdate } from './hooks/useAppUpdate'
 import { useCaseEditor } from './hooks/useCaseEditor'
 import { useRoute } from './hooks/useRoute'
+import { vaultState } from './db/repository'
 import type { CaseTab, Route } from './hooks/useRoute'
 import type { CaseRecord, CaseStatus } from './types/case'
 import { SEX_LABEL, formatDateTime } from './utils/format'
@@ -51,18 +53,34 @@ export default function App() {
 function Routes() {
   const { route, navigate, back } = useRoute()
   const { profile, loading } = useProfile()
+  /**
+   * Whether the records can be read at all.
+   *
+   * `null` while it is being worked out — rendering the app before that is
+   * known would briefly show an empty case list to someone who simply has not
+   * typed their password yet.
+   */
+  const [locked, setLocked] = useState<boolean | null>(null)
 
   useEffect(() => {
     if (!window.location.hash) window.location.hash = '#/'
+    void vaultState().then((v) => setLocked(v === 'locked'))
   }, [])
 
-  if (loading) {
+  if (loading || locked === null) {
     return (
       <div className="content">
         <p className="muted small">Đang mở ClerkMate…</p>
       </div>
     )
   }
+
+  // Nothing is read from storage until the key is in hand.
+  //
+  // Unlocking re-renders rather than reloading: the key lives only in memory,
+  // so a reload would throw it away and lock the app again on the way back —
+  // and the screens below mount fresh here anyway, with the key in hand.
+  if (locked) return <UnlockScreen onUnlocked={() => setLocked(false)} />
 
   // First run: the learner profile has to exist before anything is recorded.
   if (!isProfileComplete(profile)) return <OnboardingScreen />

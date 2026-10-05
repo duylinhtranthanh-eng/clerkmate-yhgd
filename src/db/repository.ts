@@ -8,6 +8,19 @@ import type { Attachment, CaseRecord, CaseSummary } from '../types/case'
 import type { LearnerProfile } from '../types/profile'
 import { migrateCase } from '../types/factory'
 import { uid } from '../utils/id'
+import {
+  cryptoAvailable,
+  deriveKey,
+  isSealed,
+  makeCheck,
+  openBlob,
+  openJson,
+  randomSalt,
+  sealBlob,
+  sealJson,
+  verifyCheck,
+  type Sealed,
+} from './vault'
 import { evaluateCompleteness } from '../completeness/engine'
 import { caseStatus } from '../workflow/status'
 import { unreadReviews } from '../workflow/submission'
@@ -35,7 +48,11 @@ function toSummary(c: CaseRecord): CaseSummary {
 export async function listCases(): Promise<CaseSummary[]> {
   await ensureProfiles()
   const active = await getActiveProfileId()
-  const all = await idb.all<CaseRecord>(STORE_CASES)
+  const stored = await idb.all<unknown>(STORE_CASES)
+  const opened = await Promise.all(stored.map(unsealCase))
+  // A record that will not open — the vault is locked, or this row belongs to
+  // another key — is left out rather than shown as a broken entry.
+  const all = opened.filter((c): c is CaseRecord => c !== null)
   // An unowned case belongs to whoever is looking: better that one learner sees
   // a stray record than that it disappears from every list on the device.
   const rows = active ? all.filter((r) => !r.ownerProfileId || r.ownerProfileId === active) : all
@@ -45,8 +62,10 @@ export async function listCases(): Promise<CaseSummary[]> {
 }
 
 export async function getCase(id: string): Promise<CaseRecord | null> {
-  const row = await idb.get<CaseRecord | undefined>(STORE_CASES, id)
-  return row ? migrateCase(row) : null
+  const row = await idb.get<unknown>(STORE_CASES, id)
+  if (!row) return null
+  const opened = await unsealCase(row)
+  return opened ? migrateCase(opened) : null
 }
 
 /**
@@ -61,7 +80,7 @@ export async function saveCase(
   opts: { requireExisting?: boolean } = {},
 ): Promise<CaseRecord | null> {
   if (opts.requireExisting) {
-    const existing = await idb.get<CaseRecord | undefined>(STORE_CASES, record.id)
+    const existing = await idb.get<unknown>(STORE_CASES, record.id)
     if (!existing) return null
   }
   const next: CaseRecord = {
@@ -69,7 +88,7 @@ export async function saveCase(
     updatedAt: new Date().toISOString(),
     completeness: evaluateCompleteness(record),
   }
-  await idb.put(STORE_CASES, next)
+  await idb.put(STORE_CASES, await sealCase(next))
   return next
 }
 
@@ -87,6 +106,149 @@ export async function deleteCase(id: string): Promise<void> {
   await idb.del(STORE_CASES, id)
 }
 
+// --- the vault --------------------------------------------------------------
+
+const VAULT_KEY = 'vault'
+
+interface VaultConfig {
+  enabled: boolean
+  salt: string
+  check: Sealed
+  /**
+   * Set while records are being sealed, cleared when the sweep finishes.
+   *
+   * It exists so an interrupted switch-on can be finished later instead of
+   * leaving some records in the clear forever.
+   */
+  sealing?: boolean
+}
+
+/**
+ * The key lives here and nowhere else — never in storage, never in a global the
+ * page can be tricked into reading back. Closing the tab loses it, which is the
+ * point.
+ */
+let vaultKey: CryptoKey | null = null
+
+export type VaultState = 'unavailable' | 'off' | 'locked' | 'open'
+
+async function vaultConfig(): Promise<VaultConfig | null> {
+  return (await idb.get<VaultConfig | undefined>(STORE_META, VAULT_KEY)) ?? null
+}
+
+export async function vaultState(): Promise<VaultState> {
+  if (!cryptoAvailable()) return 'unavailable'
+  const cfg = await vaultConfig()
+  if (!cfg?.enabled) return 'off'
+  return vaultKey ? 'open' : 'locked'
+}
+
+/** Opens the vault for this session. Returns false on a wrong password. */
+export async function unlockVault(password: string): Promise<boolean> {
+  const cfg = await vaultConfig()
+  if (!cfg?.enabled) return true
+  const key = await deriveKey(password, cfg.salt)
+  if (!(await verifyCheck(key, cfg.check))) return false
+  vaultKey = key
+  if (cfg.sealing) {
+    // A previous switch-on did not finish. Now that the key is in hand again,
+    // seal what it left behind.
+    await sealEverything(key)
+    await idb.put(STORE_META, { ...cfg, sealing: false }, VAULT_KEY)
+  }
+  return true
+}
+
+export function lockVault(): void {
+  vaultKey = null
+}
+
+/** Seals whatever is still stored in the clear. Safe to run twice. */
+async function sealEverything(key: CryptoKey): Promise<void> {
+  for (const row of await idb.all<CaseRecord>(STORE_CASES)) {
+    if (isSealed(row) || (row as unknown as { sealed?: Sealed }).sealed) continue
+    await idb.put(STORE_CASES, { id: row.id, sealed: await sealJson(key, row) })
+  }
+  for (const id of await idb.keys(STORE_BLOBS)) {
+    const blob = await idb.get<Blob | Sealed | undefined>(STORE_BLOBS, id)
+    if (!blob || isSealed(blob)) continue
+    await idb.put(STORE_BLOBS, await sealBlob(key, blob as Blob), id)
+  }
+}
+
+/**
+ * Encrypts everything already stored and switches the vault on.
+ *
+ * The order here is chosen against the worst failure rather than the likeliest
+ * one. The flag goes in *before* a single record is sealed: if the sweep is
+ * interrupted — a closed tab, a full disk — the app still asks for this password
+ * on the way back in, and `unsealCase` reads sealed and unsealed rows alike, so
+ * nothing is lost. Flipping the flag last would read better and would mean an
+ * interrupted sweep leaves sealed records that nobody is ever asked to unlock.
+ *
+ * The cost of this order is the opposite, milder failure: an interrupted sweep
+ * can leave some records in the clear. `sealing` records that, and the next
+ * unlock finishes the job.
+ */
+export async function enableVault(password: string): Promise<void> {
+  if (!cryptoAvailable()) throw new Error('Trình duyệt này không hỗ trợ mã hoá.')
+  if ((await vaultConfig())?.enabled) return
+  const salt = randomSalt()
+  const key = await deriveKey(password, salt)
+
+  await idb.put(
+    STORE_META,
+    { enabled: true, salt, check: await makeCheck(key), sealing: true },
+    VAULT_KEY,
+  )
+  vaultKey = key
+
+  await sealEverything(key)
+  await idb.put(
+    STORE_META,
+    { enabled: true, salt, check: await makeCheck(key), sealing: false },
+    VAULT_KEY,
+  )
+}
+
+/** Decrypts everything and switches the vault off. The vault must be open. */
+export async function disableVault(): Promise<void> {
+  const cfg = await vaultConfig()
+  if (!cfg?.enabled) return
+  if (!vaultKey) throw new Error('Phải mở khoá trước khi tắt mã hoá.')
+
+  for (const row of await idb.all<{ id: string; sealed?: Sealed }>(STORE_CASES)) {
+    if (!row.sealed) continue
+    await idb.put(STORE_CASES, await openJson<CaseRecord>(vaultKey, row.sealed))
+  }
+  for (const id of await idb.keys(STORE_BLOBS)) {
+    const stored = await idb.get<Blob | Sealed | undefined>(STORE_BLOBS, id)
+    if (!stored || !isSealed(stored)) continue
+    await idb.put(STORE_BLOBS, await openBlob(vaultKey, stored), id)
+  }
+
+  await idb.put(STORE_META, { enabled: false, salt: cfg.salt, check: cfg.check }, VAULT_KEY)
+  vaultKey = null
+}
+
+/** A stored row on its way out of the database. */
+async function unsealCase(row: unknown): Promise<CaseRecord | null> {
+  const wrapped = row as { id?: string; sealed?: Sealed }
+  if (!wrapped?.sealed) return row as CaseRecord
+  if (!vaultKey) return null
+  try {
+    return await openJson<CaseRecord>(vaultKey, wrapped.sealed)
+  } catch {
+    return null
+  }
+}
+
+/** A record on its way in. */
+async function sealCase(record: CaseRecord): Promise<unknown> {
+  if (!vaultKey) return record
+  return { id: record.id, sealed: await sealJson(vaultKey, record) }
+}
+
 // --- attachments -----------------------------------------------------------
 
 /** Every blob key an attachment owns; the derivative may not exist yet. */
@@ -97,12 +259,19 @@ export function attachmentKeys(a: Pick<Attachment, 'blobKey' | 'sanitizedBlobKey
 }
 
 export async function putAttachmentBlob(key: string, blob: Blob): Promise<void> {
-  await idb.put(STORE_BLOBS, blob, key)
+  await idb.put(STORE_BLOBS, vaultKey ? await sealBlob(vaultKey, blob) : blob, key)
 }
 
 export async function getAttachmentBlob(key: string): Promise<Blob | null> {
-  const b = await idb.get<Blob | undefined>(STORE_BLOBS, key)
-  return b ?? null
+  const stored = await idb.get<Blob | Sealed | undefined>(STORE_BLOBS, key)
+  if (!stored) return null
+  if (!isSealed(stored)) return stored as Blob
+  if (!vaultKey) return null
+  try {
+    return await openBlob(vaultKey, stored)
+  } catch {
+    return null
+  }
 }
 
 export async function deleteAttachmentBlob(key: string): Promise<void> {
@@ -272,8 +441,18 @@ export interface ImportResult {
   imagesFailed: number
 }
 
+/**
+ * A backup is written in the clear, even when the vault is on.
+ *
+ * It has to be: the file has to be restorable on another device, which will not
+ * have this key. The settings screen says so where the button is, because a
+ * learner who has switched encryption on would otherwise reasonably assume the
+ * file they just downloaded is encrypted too.
+ */
 export async function exportBackup(): Promise<BackupBundle> {
-  const cases = (await idb.all<CaseRecord>(STORE_CASES)).map(migrateCase)
+  const stored = await idb.all<unknown>(STORE_CASES)
+  const opened = await Promise.all(stored.map(unsealCase))
+  const cases = opened.filter((c): c is CaseRecord => c !== null).map(migrateCase)
   const blobs: Record<string, string> = {}
   for (const c of cases) {
     for (const a of c.attachments) {

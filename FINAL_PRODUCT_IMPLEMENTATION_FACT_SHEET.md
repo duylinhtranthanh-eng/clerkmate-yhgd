@@ -521,7 +521,12 @@ found because five new checks reported green while actually failing.
 
 ## 32. Privacy limitations
 
-- IndexedDB is **not encrypted**. Anyone who can open the browser profile can read the records.
+- IndexedDB is **unencrypted by default**. Anyone who can open the browser profile can read the
+  records unless the learner switches on at-rest encryption (Cài đặt → *Mã hoá dữ liệu trên thiết
+  bị*), which seals every case and image with AES-GCM-256 under a PBKDF2 key (310,000 iterations)
+  derived from a password that exists only in the learner's head. It is **off by default** because
+  there is no server to reset it: a forgotten password destroys the records, and that trade is the
+  learner's to make, not ours. The key lives in memory only, so closing the tab re-locks the app.
 - Clearing site data destroys everything; backup is manual.
 - **In AI mode the note text leaves the device** and is processed by a third party. ClerkMate makes
   no claim about that provider's retention, training use or jurisdiction. The in-app restriction to
@@ -529,8 +534,24 @@ found because five new checks reported green while actually failing.
   cannot tell whether a note is fictional.
 - Redaction is destructive for the copy ClerkMate keeps. It cannot affect copies made elsewhere
   (camera roll, cloud photo backup) before the image was imported.
-- The reviewer flow is unauthenticated; a submission bundle can be read and edited by anyone holding
-  the file.
+- A photographed result slip can be **read into numbers instead of stored**. The recogniser
+  (Tesseract, Vietnamese, WebAssembly) runs in the browser, served from this app's own origin, and
+  the image is held in memory only — it is never written to IndexedDB, so there is nothing to
+  redact and nothing to leak later. The identifier lines the slip prints are detected, shown, and
+  given no path into the record. This does not make a photographed slip safe in general: the
+  learner's camera roll still holds the original, which is outside this app's reach.
+- With AI mode configured, the review sheet also offers to send the photograph to the provider for
+  a more accurate read. That route is off unless the deployment configures it, asks for explicit
+  confirmation on every use, and says in the dialogue that the image — name included — is leaving
+  the device.
+- There is **no authentication at all**, and local profiles separate records between learners
+  sharing a device — they are not a login and do not keep one learner out of another's cases.
+- A backup file is exported **decrypted**, by design: a backup that only one password can open is a
+  backup that is lost with that password. The exported file is as readable as any other file on the
+  device.
+- **Voice dictation sends audio off the device** to the browser's own speech service (Google in
+  Chrome, Apple in Safari). This is the one part of core mode that is not local; the app says so on
+  screen before the microphone is enabled.
 - No security or privacy review has been carried out by anyone. **No regulatory compliance is
   claimed.**
 - Verified: no console output contains quick-note text, case data, learner name or student ID; and
@@ -548,7 +569,10 @@ found because five new checks reported green while actually failing.
   Content-Security-Policy headers. It was **not** redeployed and is not the submission target.
 - Voice dictation needs a network and a browser with a recogniser (Chrome, Safari; not Firefox), and
   the audio goes to that browser's vendor. Typed capture works offline everywhere.
-- No licence has been chosen; until one is added the code is not licensed for reuse.
+- The code carries **"All rights reserved"** on purpose, not by oversight: the source is
+  published so judges and the teaching department can read, run and verify it, and nothing
+  more is granted until the department decides what reuse it wants. `LICENSE` sets out the
+  three licences that would fit if that decision is taken later.
 - `netlify-cli` was **removed** from devDependencies on 10/09 — its `sharp` tree carried 5
   high-severity advisories and broke `npm ci` in CI. The project now reports **0 advisories**.
 

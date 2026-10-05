@@ -23,6 +23,8 @@ import {
   putAttachmentBlob,
 } from '../../db/repository'
 import { RedactEditor } from '../../components/RedactEditor'
+import { OcrSheet } from '../../components/OcrSheet'
+import type { ParsedResult } from '../../ocr/labLines'
 import { makeThumbnail, neutralAttachmentName, sanitizeImage } from '../../utils/image'
 import { buildSampleAttachment } from '../../config/demoCases/demoAttachments'
 import { uid } from '../../utils/id'
@@ -184,6 +186,7 @@ export function InvestigationsSection({ record, update }: SectionProps) {
       </Card>
 
       <Card title="Kết quả đã có">
+        <LabPhotoImport record={record} update={update} />
         <RepeatList
           items={inv.results}
           addLabel="Thêm kết quả"
@@ -457,6 +460,98 @@ function ClinicalPhotoChecklist({
   )
 }
 
+/**
+ * Photograph a result slip, keep the numbers, keep no photograph.
+ *
+ * This is the answer to a problem the redaction tool could only ever manage.
+ * A photographed slip carries the patient's name across its header; redaction
+ * paints over it, which works, but it asks a learner standing in a clinic to
+ * find every identifier on a page and be right every time. Reading the slip
+ * into numbers instead means there is no image to redact, because there is no
+ * image: the file is read into memory, recognised, and dropped when this
+ * component unmounts. It is never written to the database and never reaches a
+ * blob store, so there is nothing to leak later and nothing to forget to clean
+ * up.
+ *
+ * The photograph can still be attached the ordinary way, for a slip someone
+ * genuinely needs to see. This is simply the route that does not require that.
+ */
+function LabPhotoImport({
+  record,
+  update,
+}: {
+  record: SectionProps['record']
+  update: SectionProps['update']
+}) {
+  const [image, setImage] = useState<Blob | null>(null)
+  const [open, setOpen] = useState(false)
+  const toast = useToast()
+  const locked = record.submission.locked
+
+  const importRows = (rows: ParsedResult[]) => {
+    update((d) => {
+      for (const row of rows) {
+        d.investigations.results.push({
+          id: uid('res'),
+          name: row.name,
+          date: todayIso(),
+          value: row.value,
+          unit: row.unit,
+          // The flag only carries over when the slip printed an interval to
+          // justify it. Everything else is left for the learner to decide.
+          flag: row.flag === 'abnormal' ? 'abnormal' : row.flag === 'normal' ? 'normal' : '',
+          interpretation: '',
+          attachmentId: null,
+        })
+      }
+    })
+    setOpen(false)
+    setImage(null)
+    toast(`Đã thêm ${rows.length} kết quả. Ảnh không được lưu — nhớ viết lý giải cho từng dòng.`)
+  }
+
+  return (
+    <>
+      <div className="field">
+        <label
+          className="btn btn--secondary btn--block"
+          style={{ cursor: locked ? 'not-allowed' : 'pointer', opacity: locked ? 0.55 : 1 }}
+        >
+          {locked ? '🔒 Ca đã khoá sửa' : '📷 Chụp phiếu kết quả → đọc thành số liệu'}
+          <input
+            type="file"
+            accept="image/*"
+            capture="environment"
+            disabled={locked}
+            style={{ display: 'none' }}
+            onChange={(e) => {
+              const file = e.target.files?.[0] ?? null
+              e.target.value = ''
+              if (!file) return
+              setImage(file)
+              setOpen(true)
+            }}
+          />
+        </label>
+        <p className="small muted" style={{ margin: '6px 0 0' }}>
+          Ảnh chỉ nằm trong bộ nhớ máy để đọc chữ, <strong>không được lưu vào bệnh án</strong> — nên
+          không có gì phải che.
+        </p>
+      </div>
+
+      <OcrSheet
+        open={open}
+        image={image}
+        onClose={() => {
+          setOpen(false)
+          setImage(null)
+        }}
+        onImport={importRows}
+      />
+    </>
+  )
+}
+
 function ResultImage({
   record,
   update,
@@ -470,6 +565,7 @@ function ResultImage({
 }) {
   const attachment = record.attachments.find((a) => a.id === result.attachmentId) ?? null
   const [busy, setBusy] = useState(false)
+  const [reading, setReading] = useState<Blob | null>(null)
   const toast = useToast()
   const locked = record.submission.locked
 
@@ -507,6 +603,61 @@ function ResultImage({
     } finally {
       setBusy(false)
     }
+  }
+
+  /**
+   * Reads an already-attached slip.
+   *
+   * Deliberately reads `blobKey` — the untouched local copy — rather than the
+   * sanitised derivative: redaction paints black boxes over exactly the kind of
+   * printed text the recogniser is trying to read, and running on the redacted
+   * copy would lose rows that sit near an identifier. The pixels never leave
+   * this function, and what the learner imports from them is numbers.
+   */
+  const readSlip = async () => {
+    if (!attachment) return
+    setBusy(true)
+    try {
+      const blob = await getAttachmentBlob(attachment.blobKey)
+      if (!blob) {
+        toast('Không mở được ảnh đã lưu.')
+        return
+      }
+      setReading(blob)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const importRows = (rows: ParsedResult[]) => {
+    update((d) => {
+      const target = d.investigations.results.find((r) => r.id === result.id)
+      // The row the photograph is attached to gets the first result if it is
+      // still empty, so a learner who photographed one analyte does not end up
+      // with an empty row beside a filled one.
+      let rest = rows
+      if (target && !target.name && !target.value && rows[0]) {
+        target.name = rows[0].name
+        target.value = rows[0].value
+        target.unit = rows[0].unit
+        if (rows[0].flag) target.flag = rows[0].flag
+        rest = rows.slice(1)
+      }
+      for (const row of rest) {
+        d.investigations.results.push({
+          id: uid('res'),
+          name: row.name,
+          date: result.date || todayIso(),
+          value: row.value,
+          unit: row.unit,
+          flag: row.flag === 'abnormal' ? 'abnormal' : row.flag === 'normal' ? 'normal' : '',
+          interpretation: '',
+          attachmentId: null,
+        })
+      }
+    })
+    setReading(null)
+    toast(`Đã thêm ${rows.length} kết quả. Giờ có thể gỡ ảnh nếu không cần giữ.`)
   }
 
   const detach = async () => {
@@ -570,10 +721,18 @@ function ResultImage({
             <Badge tone="danger">chưa che thông tin</Badge>
           )}
           <div className="btn-row" style={{ marginTop: 8 }}>
+            <button
+              type="button"
+              className="btn btn--primary btn--sm"
+              disabled={locked || busy}
+              onClick={() => void readSlip()}
+            >
+              {busy ? 'Đang mở…' : 'Đọc số liệu từ ảnh'}
+            </button>
             {!attachment.redacted && (
               <button
                 type="button"
-                className="btn btn--primary btn--sm"
+                className="btn btn--secondary btn--sm"
                 disabled={locked}
                 onClick={() => onRedact(attachment)}
               >
@@ -589,8 +748,20 @@ function ResultImage({
               Gỡ ảnh
             </button>
           </div>
+          {!attachment.redacted && (
+            <p className="small muted" style={{ margin: '8px 0 0' }}>
+              Đọc số liệu ra rồi gỡ ảnh thì không còn gì phải che.
+            </p>
+          )}
         </div>
       </div>
+
+      <OcrSheet
+        open={reading !== null}
+        image={reading}
+        onClose={() => setReading(null)}
+        onImport={importRows}
+      />
     </div>
   )
 }

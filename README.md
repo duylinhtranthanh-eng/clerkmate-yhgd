@@ -139,8 +139,15 @@ Medicine physician. That is a fact about how the code was produced, not a runtim
 - Records stay **on the device**, in IndexedDB. There is no account and no automatic cloud sync.
 - The record has **no field for a patient identifier**, and the attachment redaction tool exists so
   that photographed slips can have identifiers removed before a record is shared.
-- **IndexedDB is not encrypted.** Anyone who can use the browser profile can read the records, and
-  clearing site data deletes them — Settings has a backup-to-file function.
+- A result slip can be **photographed and read into numbers without the photograph being kept**.
+  Recognition runs in the browser (Tesseract, Vietnamese) from this app's own origin; the image
+  stays in memory and is never stored. Lines that look like a name, a date of birth, an address or
+  a record number are detected and have no path into the record.
+- **IndexedDB is not encrypted by default.** Anyone who can use the browser profile can read the
+  records, and clearing site data deletes them — Settings has a backup-to-file function. Settings
+  also offers at-rest encryption (AES-GCM-256 under a PBKDF2 key, 310,000 iterations) that seals
+  every case and image; it is off by default because with no server behind it, a forgotten password
+  destroys the records.
 - **No claim of compliance with any data-protection regulation is made**, and no third party has
   reviewed the app's security.
 
@@ -165,18 +172,38 @@ rather than taken on trust. They need only Node and a local Chrome — no test f
 dependency.
 
 ```bash
-npm test              # 55 rule checks: completeness engine, learner levels,
-                      # status machine, submission gate, AI response validator.
-                      # No browser needed; runs in CI on every push.
+npm test                  # 103 rule checks: completeness engine, learner levels,
+                          # status machine, submission gate, AI response validator,
+                          # and the result-slip parser. No browser needed; runs in
+                          # CI on every push.
 
-npm run preview:pages &   # serves the build under a repository subpath,
-                          # i.e. the GitHub Pages hosting shape
-npm run verify:app        # 100 end-to-end browser checks: judge flow, demo data,
-                          # parser, completeness, redaction (including pixel
-                          # checks), backup round-trip, the submission lock across
-                          # every editable route, grading, PWA and offline
-npm run verify:print      # 27 print checks plus a real sample PDF
+npm run build
+npm run serve:dist &      # serves the build under a repository subpath — the
+                          # GitHub Pages hosting shape — with the response headers
+                          # read straight out of netlify.toml
+
+npm run verify:capture    #  29  the quick-note path: typing, dictation, the
+                          #      structurer, and what it refuses to invent
+npm run verify:print      #  49  the department's four-page form, plus a real PDF
+npm run verify:profiles   #  14  several learners sharing one device
+npm run verify:vault      #  15  at-rest encryption, switched on over a real case
+                          #      and back off again, compared key by key
+npm run verify:ocr        #  15  reading a result slip: the numbers must arrive,
+                          #      the patient's name must not, no image may be
+                          #      stored, and nothing may reach another host
+npm run verify:app        # 104  end-to-end: demo data, parser, completeness,
+                          #      redaction down to the pixels, backup round-trip,
+                          #      the submission lock across every editable route,
+                          #      PWA and offline
 ```
+
+**Run `verify:app` last.** It proves the offline claim by killing the server on port 4191 and does
+not bring it back, so anything after it runs against nothing at all.
+
+**Use `serve:dist`, not a bare static server.** It applies the deployment's own
+`Content-Security-Policy`. Without it the suites test a friendlier environment than the one the app
+ships into — which is how the on-device slip recogniser came to pass every check while being
+forbidden outright by the production policy.
 
 What each check asserts, and which claims are verified versus not, is recorded in
 [FINAL_PRODUCT_IMPLEMENTATION_FACT_SHEET.md](FINAL_PRODUCT_IMPLEMENTATION_FACT_SHEET.md), including
@@ -194,6 +221,7 @@ including a Content-Security-Policy, and is the only host that can run the optio
 
 ## Licence
 
-See [LICENSE](LICENSE). No licence has been granted yet — the source is published so that judges and
-the teaching department can read and verify it. Replace that file with a real licence before relying
-on the code elsewhere.
+See [LICENSE](LICENSE). The project is **"All rights reserved"** by choice: the source is published
+so that judges and the teaching department can read, run and verify it, and no reuse beyond that is
+granted while the department has not decided what it wants. `LICENSE` lists the three licences that
+would fit if that decision is taken — swapping it in is a one-file change.

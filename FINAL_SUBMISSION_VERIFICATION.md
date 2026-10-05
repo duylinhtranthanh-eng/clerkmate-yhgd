@@ -27,15 +27,17 @@ does not deploy: the URL keeps the previous good build rather than serving a bro
 
 | Suite | Command | Result |
 |---|---|---|
-| Rule audit | `npm test` | **96 / 96** |
-| End-to-end, real Chrome | `npm run verify:app` | **104 / 104** |
+| Rule audit | `npm test` | **103 / 103** |
 | Quick Capture | `npm run verify:capture` | **29 / 29** |
 | Print and PDF | `npm run verify:print` | **49 / 49** |
 | Local learner profiles | `npm run verify:profiles` | **14 / 14** |
+| At-rest encryption | `npm run verify:vault` | **15 / 15** |
+| Reading a result slip | `npm run verify:ocr` | **15 / 15** |
+| End-to-end, real Chrome | `npm run verify:app` | **104 / 104** |
 
-**292 checks, all passing.** The last four drive a real Chrome over the DevTools Protocol against
-the built site served from a repository subpath — the same shape as GitHub Pages — not a test
-renderer or a mock.
+**329 checks, all passing.** The last six drive a real Chrome over the DevTools Protocol against the
+built site, served from a repository subpath — the same shape as GitHub Pages — with the
+deployment's own response headers, not a test renderer or a mock.
 
 One thing worth saying about the audit itself: its runner used to call check bodies without awaiting
 them, so every asynchronous check printed a tick and then failed *after* the summary. It was found
@@ -55,6 +57,19 @@ What the suites actually prove, rather than merely exercise:
   than kept alongside.
 - **The printed form is compared against the department's scan by eye**, page by page, not only
   asserted against the DOM. Four official pages render on four sheets.
+- **Encryption is judged on whether it can lose a record.** A real case with a real image is sealed,
+  the page reloaded, the wrong password refused, the right one accepted, and the record then
+  decrypted and compared against the original key by key. Only the two stamps the app recomputes on
+  every save differ.
+- **Slip reading is judged on what ends up stored.** A Vietnamese result slip is drawn, handed to
+  the app through the same file input a phone camera uses, and recognised; the suite then reads the
+  database and requires the analytes to be present, the patient's name to be absent, and no image to
+  have been stored at all. Every request the page made is counted, and any host other than the one
+  serving the app fails the run.
+- **Encryption is judged on whether it can lose a record, not on whether it encrypts.** A real case
+  with a real image is sealed, the page is reloaded, the wrong password is refused, the right one
+  opens it, and the record is then decrypted and compared against the original key by key. Only the
+  two stamps the app recomputes on every save (`updatedAt`, `completeness.computedAt`) differ.
 
 ## 3. Privacy, verified
 
@@ -152,18 +167,34 @@ These are things the app cannot do, stated so that no one discovers them during 
 npm ci
 npm test
 npm run build
-npx serve dist        # or any static server at a /clerkmate-yhgd/ subpath on :4191
-npm run verify:app
+npm run serve:dist &   # serves dist with the deployment's own headers, on :4191
 npm run verify:capture
 npm run verify:print
 npm run verify:profiles
+npm run verify:vault
+npm run verify:ocr
+npm run verify:app     # last on purpose — see below
 ```
 
-The four browser suites need Google Chrome at the standard macOS path and a static server on
+The six browser suites need Google Chrome at the standard macOS path and a server on
 `http://localhost:4191/clerkmate-yhgd/`. `VERIFY_BASE=<url> npm run verify:app` points the same suite
 at the deployed site.
 
+Two things about that list are deliberate rather than arbitrary.
+
+**`verify:app` runs last** because it proves the offline claim by killing the server on port 4191 and
+never bringing it back. Run it first and the five suites after it all fail against a dead server,
+which looks like five broken features and is really one missing line in a README.
+
+**The server is `npm run serve:dist`, not `npx serve dist`.** It reads `Content-Security-Policy` and
+the other headers straight out of `netlify.toml`, so the suites exercise the environment the app
+ships into. They did not always: under a bare static server the on-device slip recogniser passed
+every check and would have been dead on the deployed site, because the production policy forbids
+both the `blob:` worker Tesseract starts and the WebAssembly it compiles. That is the sort of defect
+a test suite exists to catch, and it was caught only once the test server stopped being friendlier
+than production.
+
 ## 9. Status
 
-**READY FOR SUBMISSION.** 292 checks passing on commit `22af5f0`, deployed, and the live bundle
+**READY FOR SUBMISSION.** 329 checks passing on commit `22af5f0`, deployed, and the live bundle
 confirmed identical to the verified build.

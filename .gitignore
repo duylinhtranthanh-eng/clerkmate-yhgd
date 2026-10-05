@@ -67,3 +67,9 @@ ClerkMate_*.pdf
 # The department's own paper form. Kept locally as the layout reference for the
 # printed record; it is their document, not ours, so it is not published here.
 docs/reference/
+
+# OCR runtime, copied from node_modules by scripts/sync-ocr-assets.mjs.
+# The language data beside them is committed on purpose.
+public/ocr/*.wasm.js
+public/ocr/worker.min.js
+public/ocr/tesseract.esm.min.js

@@ -37,7 +37,19 @@
     # lives on Netlify, never in the bundle.
     #
     # `style-src` allows inline styles because React sets style attributes.
-    Content-Security-Policy = "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'"
+    #
+    # `worker-src 'self' blob:` and `'wasm-unsafe-eval'` are what the on-device
+    # slip recogniser needs, and nothing else in the app uses either. Tesseract
+    # starts its worker from a blob: URL, and WebAssembly will not compile under
+    # a policy that does not say so. Both were found by serving this exact header
+    # in front of the build and watching the feature fail; without them the
+    # recogniser works in development and is dead on the deployed site.
+    #
+    # Neither widens where data can go. `connect-src 'self'` is untouched, so the
+    # claim these headers exist to enforce — that nothing reaches a third party —
+    # still holds, and `'wasm-unsafe-eval'` permits compiling WebAssembly only,
+    # not `eval` of JavaScript.
+    Content-Security-Policy = "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'"
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "no-referrer"
     Permissions-Policy = "geolocation=(), microphone=(), camera=(self), interest-cohort=()"

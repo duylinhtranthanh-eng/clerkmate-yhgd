@@ -6,7 +6,7 @@
  * machine, the submission gate, the backup round-trip and the AI response
  * validator. Runs the real modules — no mocks of our own code.
  *
- * Dependency-free on purpose: the project ships two runtime dependencies and no
+ * Dependency-free on purpose: the project ships three runtime dependencies and no
  * test framework, so this bundles the TypeScript with the esbuild that Vite
  * already brings and runs it on Node.
  *
@@ -46,6 +46,7 @@ export { hasDerivative, isSubmissionSafe, faceDeclaredPresent, faceUnanswered, w
 export { fallsBand } from '${process.cwd()}/src/config/falls'
 export { SCALES } from '${process.cwd()}/src/config/scales'
 export { computeBmi, bmiCategory } from '${process.cwd()}/src/utils/format'
+export { parseOcrLines, parseResultLine, looksLikeIdentifier, flagAgainstReference, toNumber, identifierCount } from '${process.cwd()}/src/ocr/labLines'
 `,
 )
 
@@ -809,6 +810,95 @@ t('risk scaffolding fades by level, with the emergency exception', () => {
   eq(M.riskModeFor('Y2', cardio), 'recallThenChecklist')
   eq(M.riskModeFor('Y5', cardio), 'recallThenChecklist')
   eq(M.riskModeFor('SDH', cardio), 'generate')
+})
+
+// ------------------------------------------------- reading a photographed slip
+console.log('\nresult slips read from a photograph')
+
+t('every identifier a Vietnamese slip prints is recognised as one', () => {
+  const header = [
+    'Họ và tên: NGUYỄN VĂN A',
+    'Họ tên BN: Trần Thị B',
+    'Ngày sinh: 12/03/1958',
+    'Năm sinh: 1958',
+    'Địa chỉ: 25 Lê Lợi, Quận 1',
+    'Số điện thoại: 0903 123 456',
+    'SĐT: 0903123456',
+    'CCCD: 079058001234',
+    'Mã BN: 20260105-112',
+    'Số bệnh án: 4471',
+    'BHYT: DN4797912345678',
+    'Bác sĩ chỉ định: BS. Lê C',
+  ]
+  for (const line of header) {
+    ok(M.looksLikeIdentifier(line), `missed an identifier: ${line}`)
+  }
+})
+
+t('an analyte row is not mistaken for an identifier', () => {
+  for (const line of ['Glucose 5,6 mmol/L 3,9 - 6,4', 'Creatinin 78 µmol/L 62 - 106', 'HbA1c 7,8 % 4,0 - 6,0']) {
+    ok(!M.looksLikeIdentifier(line), `wrongly flagged as identity: ${line}`)
+  }
+})
+
+t('a header line never yields a result, however numeric it looks', () => {
+  // This is the failure that matters: a date of birth parses beautifully as a
+  // number beside a name, and would otherwise enter the record as a value.
+  eq(M.parseResultLine('Ngày sinh: 12/03/1958'), null)
+  eq(M.parseResultLine('Số điện thoại: 0903 123 456'), null)
+  eq(M.parseResultLine('Mã BN: 20260105-112'), null)
+})
+
+t('the usual rows are read with name, value and unit intact', () => {
+  const g = M.parseResultLine('Glucose 5,6 mmol/L 3,9 - 6,4')
+  eq(g.name, 'Glucose')
+  eq(g.value, '5,6')
+  eq(g.unit, 'mmol/L')
+  const c = M.parseResultLine('Creatinin 78 µmol/L 62 - 106')
+  eq(c.name, 'Creatinin')
+  eq(c.value, '78')
+  eq(c.unit, 'µmol/L')
+})
+
+t('decimals written with a comma are read as numbers', () => {
+  eq(M.toNumber('5,6'), 5.6)
+  eq(M.toNumber('5.6'), 5.6)
+  eq(M.toNumber('78'), 78)
+  eq(M.toNumber('abc'), null)
+})
+
+t('the flag comes from the printed interval, never from the analyte name', () => {
+  eq(M.flagAgainstReference('5,6', '3,9 - 6,4'), 'normal')
+  eq(M.flagAgainstReference('7,8', '3,9 - 6,4'), 'abnormal')
+  eq(M.flagAgainstReference('2,1', '3,9 - 6,4'), 'abnormal')
+  eq(M.flagAgainstReference('55', '< 40'), 'abnormal')
+  eq(M.flagAgainstReference('28', '< 40'), 'normal')
+  // No interval printed means no claim is made.
+  eq(M.flagAgainstReference('5,6', ''), '')
+  eq(M.flagAgainstReference('5,6', 'mmol/L'), '')
+  // Glucose is high, but with nothing printed to compare against the app says
+  // nothing rather than reaching for a reference range of its own.
+  eq(M.parseResultLine('Glucose 11,2 mmol/L').flag, '')
+})
+
+t('a whole slip classifies into identity, results and the rest', () => {
+  const slip = [
+    'PHÒNG KHÁM ĐA KHOA',
+    'Họ và tên: NGUYỄN VĂN A',
+    'Ngày sinh: 12/03/1958',
+    'XÉT NGHIỆM SINH HOÁ',
+    'Glucose 11,2 mmol/L 3,9 - 6,4',
+    'Ure 4,2 mmol/L 2,5 - 7,5',
+    'Creatinin 78 µmol/L 62 - 106',
+  ].map((text) => ({ text, confidence: 90 }))
+  const parsed = M.parseOcrLines(slip)
+  eq(parsed.length, 7)
+  eq(M.identifierCount(parsed), 2)
+  eq(parsed.filter((l) => l.kind === 'result').length, 3)
+  eq(parsed[4].result.flag, 'abnormal')
+  eq(parsed[5].result.flag, 'normal')
+  // Order is the slip's order, so a learner can check nothing was dropped.
+  eq(parsed.map((l) => l.index).join(','), '0,1,2,3,4,5,6')
 })
 
 rmSync(dir, { recursive: true, force: true })
