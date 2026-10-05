@@ -136,6 +136,28 @@ const form = await ev(`
     appendixLabelled: /không có trong bệnh án giấy/.test(t),
   };
 `)
+// The deck claims the printed record is the department's own form. Captured
+// here, from the form itself, so the picture on the slide cannot drift away
+// from what the app actually prints — which it had, showing the app's own
+// document under a caption saying it was the department's.
+if (process.env.FORM_SHOT) {
+  // Printed, not screenshotted. On screen the form is one long scrolling
+  // column; what the department receives is four A4 pages, and that is what a
+  // slide claiming to show the department's form has to show.
+  await S('Emulation.setEmulatedMedia', { media: 'print' })
+  await sleep(500)
+  const { data } = await S('Page.printToPDF', {
+    printBackground: true, paperWidth: 8.27, paperHeight: 11.69,
+    marginTop: 0.4, marginBottom: 0.4, marginLeft: 0.4, marginRight: 0.4,
+    preferCSSPageSize: true,
+  })
+  await S('Emulation.setEmulatedMedia', { media: '' })
+  await sleep(300)
+  await mkdir(process.env.FORM_SHOT.replace(/\/[^/]+$/, ''), { recursive: true })
+  await writeFile(process.env.FORM_SHOT, Buffer.from(data, 'base64'))
+  console.log(`    biểu mẫu Bộ môn: ${process.env.FORM_SHOT}`)
+}
+
 check('the department form is what the learner exports by default', form.isDefault)
 check('it is the form, four pages of it', form.pages === 4 || form.pages === 5, `${form.pages} pages`)
 check('it carries the department masthead', form.masthead)
