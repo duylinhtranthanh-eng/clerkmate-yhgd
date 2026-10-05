@@ -1,7 +1,7 @@
 # ClerkMate — Final Submission Verification
 
 **Verified:** 5 October 2026, 22:30 (GMT+7)
-**Commit:** `66e98fc`
+**Commit:** `4297120`
 **Method:** every number below comes from a run on this date against the production build, served
 with the deployment's own response headers. Nothing here is quoted from an earlier run or inferred
 from source.
@@ -33,10 +33,10 @@ does not deploy: the URL keeps the previous good build rather than serving a bro
 | Print and PDF | `npm run verify:print` | **49 / 49** |
 | Local learner profiles | `npm run verify:profiles` | **14 / 14** |
 | At-rest encryption | `npm run verify:vault` | **15 / 15** |
-| Reading a result slip | `npm run verify:ocr` | **15 / 15** |
+| Reading a result slip | `npm run verify:ocr` | **19 / 19** |
 | End-to-end, real Chrome | `npm run verify:app` | **104 / 104** |
 
-**329 checks, all passing.** The last six drive a real Chrome over the DevTools Protocol against the
+**333 checks, all passing.** The last six drive a real Chrome over the DevTools Protocol against the
 built site, served from a repository subpath — the same shape as GitHub Pages — with the
 deployment's own response headers, not a test renderer or a mock.
 
@@ -197,6 +197,17 @@ than production.
 
 ## 9. Status
 
-**READY FOR SUBMISSION.** 329 checks passing on commit `66e98fc`. The competition build deployed and
-confirmed identical was `22af5f0`; everything since — the submission documents, the record gaps,
-at-rest encryption and reading a result slip — is verified here but **not yet deployed**.
+**READY FOR SUBMISSION.** 333 checks passing on commit `4297120`. Deployed to GitHub Pages and confirmed on the
+deployment itself, not only on a local build:
+
+| Run against the live site | Result |
+|---|---|
+| `VERIFY_BASE=<live> npm run verify:ocr` | **19 / 19** |
+| `VERIFY_BASE=<live> npm run verify:app` | **102 / 102** |
+
+The live bundle filename matches the verified build. The end-to-end suite asserts 102 of its 104
+checks remotely rather than all of them: a deployed host cannot be switched off, so the two that
+prove the service worker served the shell *with the server gone* are reported rather than asserted
+there, and are asserted properly by the local run. The slip suite's "nothing was sent to anyone
+else" check passed against the live host too — the only host the page contacted was the one serving
+it.
