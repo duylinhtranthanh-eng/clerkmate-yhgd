@@ -507,6 +507,8 @@ export function buildElderlyMultimorbidCase(level: LearnerLevel = 'SDH'): CaseRe
   c.followUps = [
     {
       id: uid('fu'),
+      pulse: '', bloodPressure: '', weightKg: '', heightCm: '', bmi: '',
+      noResponseAfter: '', complaint: '', specialistOpinion: '',
       date: todayIso(),
       subjective:
         'Không té thêm lần nào trong 2 tuần. Còn choáng nhẹ khi đứng lên nhưng đã biết đứng theo ba bước. ' +

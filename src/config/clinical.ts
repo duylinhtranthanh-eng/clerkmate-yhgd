@@ -50,6 +50,11 @@ export const EXAM_SYSTEMS: { id: string; label: string; normal: string }[] = [
     normal: 'Da niêm hồng, không ban, không xuất huyết dưới da, không phù.',
   },
   {
+    id: 'breast',
+    label: 'Vú',
+    normal: 'Hai vú cân đối, không khối, không tiết dịch núm vú, hạch nách không sờ chạm.',
+  },
+  {
     id: 'genitourinary',
     label: 'Tiết niệu — sinh dục',
     normal: 'Không cầu bàng quang, không đau vùng hố thận, không rối loạn đi tiểu.',

@@ -57,7 +57,7 @@ export const FORM_EXAM_ROWS: { label: string; systemId: string | null }[] = [
   { label: 'Hô hấp', systemId: 'respiratory' },
   { label: 'Tim mạch', systemId: 'cardiovascular' },
   { label: 'Bụng', systemId: 'abdomen' },
-  { label: 'Vú', systemId: null },
+  { label: 'Vú', systemId: 'breast' },
   { label: 'Niệu sinh dục', systemId: 'genitourinary' },
   { label: 'Cơ xương khớp', systemId: 'musculoskeletal' },
   { label: 'Thần kinh', systemId: 'neurological' },

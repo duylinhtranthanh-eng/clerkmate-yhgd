@@ -632,6 +632,23 @@ export interface FamilyMember {
 export interface FollowUp {
   id: string
   date: Text
+  /**
+   * Vitals measured at this visit.
+   *
+   * The paper form repeats a short vitals row on every follow-up sheet, and it
+   * has to: a blood pressure recorded three months ago is not this visit's. The
+   * index visit keeps its own set in `examination.vitals`.
+   */
+  pulse: Text
+  bloodPressure: Text
+  weightKg: Text
+  heightCm: Text
+  bmi: Text
+  /** The form asks separately what did *not* respond, and what the patient complains of. */
+  noResponseAfter: Text
+  complaint: Text
+  /** "Ý kiến chuyên khoa: BS" on the paper form. */
+  specialistOpinion: Text
   subjective: Text
   objective: Text
   assessment: Text
@@ -801,4 +818,8 @@ export interface CaseSummary {
   /** Derived on read, so the list badge can never disagree with the record. */
   status: CaseStatus
   hasUnreadReview: boolean
+  /** Keywords the learner tagged the case with, so the list can be searched by them. */
+  tags: string[]
+  /** The working diagnosis, for searching a case by what it turned out to be. */
+  diagnosis: string
 }

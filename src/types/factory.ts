@@ -379,7 +379,7 @@ function normalizeSystems(
   fallback: SystemExam[],
 ): SystemExam[] {
   if (!stored || stored.length === 0) return fallback
-  return stored.map((s) => {
+  const kept = stored.map((s) => {
     const legacy = s as SystemExam & { examined?: boolean }
     const status: ExamStatus = s.status
       ? s.status
@@ -388,6 +388,11 @@ function normalizeSystems(
         : 'unchecked'
     return { id: s.id, label: s.label, status, findings: s.findings ?? '' }
   })
+  // A system added to the catalogue after a record was written would otherwise
+  // never appear on it — the record would quietly keep the old, shorter list and
+  // the learner would have no way to examine the new one.
+  const seen = new Set(kept.map((s) => s.id))
+  return [...kept, ...fallback.filter((s) => !seen.has(s.id))]
 }
 
 export function migrateCase(raw: unknown): CaseRecord {

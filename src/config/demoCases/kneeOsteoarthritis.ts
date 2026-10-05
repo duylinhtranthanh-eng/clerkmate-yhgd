@@ -429,6 +429,8 @@ export function buildKneeOsteoarthritisCase(level: LearnerLevel = 'SDH'): CaseRe
   c.followUps = [
     {
       id: uid('fu'),
+      pulse: '', bloodPressure: '', weightKg: '', heightCm: '', bmi: '',
+      noResponseAfter: '', complaint: '', specialistOpinion: '',
       date: todayIso(),
       subjective: 'Đau gối giảm còn 4/10, đi bộ được khoảng 400 m mới phải nghỉ.',
       objective: 'HA 136/82 mmHg, cân nặng 61 kg. Khớp gối phải còn ấn đau nhẹ khe khớp trong.',

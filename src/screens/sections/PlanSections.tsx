@@ -321,6 +321,14 @@ export function FollowUpSection({ record, update }: SectionProps) {
             void d.followUps.push({
               id: uid('fu'),
               date: '',
+              pulse: '',
+              bloodPressure: '',
+              weightKg: '',
+              heightCm: '',
+              bmi: '',
+              noResponseAfter: '',
+              complaint: '',
+              specialistOpinion: '',
               subjective: '',
               objective: '',
               assessment: '',
@@ -345,6 +353,42 @@ export function FollowUpSection({ record, update }: SectionProps) {
                 onChange={(e) => update((d) => void (d.followUps[i].date = e.target.value))}
               />
             </Field>
+            {/* The paper form repeats a vitals row on every follow-up sheet. */}
+            <div className="grid-2">
+              <Field label="Mạch">
+                <TextInput
+                  inputMode="numeric"
+                  value={item.pulse}
+                  onChange={(e) => update((d) => void (d.followUps[i].pulse = e.target.value))}
+                  placeholder="78"
+                />
+              </Field>
+              <Field label="Huyết áp">
+                <TextInput
+                  value={item.bloodPressure}
+                  onChange={(e) => update((d) => void (d.followUps[i].bloodPressure = e.target.value))}
+                  placeholder="130/80"
+                />
+              </Field>
+            </div>
+            <div className="grid-2">
+              <Field label="Cân nặng (kg)">
+                <TextInput
+                  inputMode="decimal"
+                  value={item.weightKg}
+                  onChange={(e) => update((d) => void (d.followUps[i].weightKg = e.target.value))}
+                  placeholder="62"
+                />
+              </Field>
+              <Field label="BMI">
+                <TextInput
+                  inputMode="decimal"
+                  value={item.bmi}
+                  onChange={(e) => update((d) => void (d.followUps[i].bmi = e.target.value))}
+                  placeholder="25.8"
+                />
+              </Field>
+            </div>
             <Field label="S — Bệnh nhân kể">
               <TextArea rows={2} value={item.subjective} onChange={(e) => update((d) => void (d.followUps[i].subjective = e.target.value))} />
             </Field>
@@ -356,6 +400,27 @@ export function FollowUpSection({ record, update }: SectionProps) {
             </Field>
             <Field label="P — Kế hoạch">
               <TextArea rows={2} value={item.plan} onChange={(e) => update((d) => void (d.followUps[i].plan = e.target.value))} />
+            </Field>
+            <Field label="Chưa đáp ứng — sau bao lâu" help="Ô riêng trên bệnh án giấy.">
+              <TextInput
+                value={item.noResponseAfter}
+                onChange={(e) => update((d) => void (d.followUps[i].noResponseAfter = e.target.value))}
+                placeholder="Sau 4 tuần"
+              />
+            </Field>
+            <Field label="Than phiền">
+              <TextInput
+                value={item.complaint}
+                onChange={(e) => update((d) => void (d.followUps[i].complaint = e.target.value))}
+                placeholder="Vẫn đau khi lên cầu thang"
+              />
+            </Field>
+            <Field label="Ý kiến chuyên khoa">
+              <TextArea
+                rows={2}
+                value={item.specialistOpinion}
+                onChange={(e) => update((d) => void (d.followUps[i].specialistOpinion = e.target.value))}
+              />
             </Field>
             <Field label="Đáp ứng điều trị">
               <TextInput value={item.treatmentResponse} onChange={(e) => update((d) => void (d.followUps[i].treatmentResponse = e.target.value))} placeholder="Đau giảm từ 7/10 còn 3/10" />

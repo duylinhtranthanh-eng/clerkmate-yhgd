@@ -78,6 +78,15 @@ export function PatientSection({ record, update }: SectionProps) {
           </Field>
         </div>
 
+        <Field label="Số điện thoại" help="In trên bệnh án theo mẫu Bộ môn. Không bắt buộc.">
+          <TextInput
+            value={p.phone}
+            inputMode="tel"
+            onChange={(e) => update((d) => void (d.patient.phone = e.target.value))}
+            placeholder="Không bắt buộc"
+          />
+        </Field>
+
         <Field label="Nghề nghiệp">
           <TextInput
             value={p.occupation}

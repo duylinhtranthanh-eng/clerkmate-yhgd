@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { CaseSummary, LearnerLevel } from '../types/case'
 import type { LearnerProfile } from '../types/profile'
 import { createProfile } from '../types/profile'
@@ -7,6 +7,7 @@ import { createEmptyCase } from '../types/factory'
 import { STATUS } from '../workflow/status'
 import { LEVELS, LEVEL_ORDER } from '../config/levels'
 import { SEX_LABEL, relativeTime } from '../utils/format'
+import { stripDiacritics } from '../parsing/text'
 import { useProfile } from '../hooks/useProfile'
 import { Badge, Card, Chip, EmptyState, Field, Notice, Progress, TextInput } from '../components/Ui'
 import { Sheet } from '../components/Sheet'
@@ -26,6 +27,26 @@ export function HomeScreen({ navigate }: { navigate: (r: Route) => void }) {
   const [switching, setSwitching] = useState(false)
   const [roster, setRoster] = useState<{ profile: LearnerProfile; cases: number }[]>([])
   const [adding, setAdding] = useState(false)
+  const [query, setQuery] = useState('')
+
+  /**
+   * Cases matching the search box.
+   *
+   * Diacritic-insensitive, because a learner hunting for "đau gối" will type
+   * "dau goi" as often as not, and the keyboard on a phone makes the accents
+   * the slowest part.
+   */
+  const shown = useMemo(() => {
+    const q = stripDiacritics(query).toLowerCase().trim()
+    if (!q) return cases
+    return cases.filter((c) =>
+      stripDiacritics(
+        [c.caseLabel, c.patientName, c.chiefComplaint, c.diagnosis, ...c.tags].join(' '),
+      )
+        .toLowerCase()
+        .includes(q),
+    )
+  }, [cases, query])
   const level: LearnerLevel = profile?.level ?? 'Y5'
   const toast = useToast()
 
@@ -80,7 +101,21 @@ export function HomeScreen({ navigate }: { navigate: (r: Route) => void }) {
     }
   }
 
+  /**
+   * Deleting is not what the submission lock governs — the lock stops edits, and
+   * a learner may well want to clear a demo case afterwards. But a record marked
+   * as handed in is the one they are least likely to mean, so that one asks
+   * twice and says why.
+   */
   const onDelete = async (id: string) => {
+    const summary = cases.find((c) => c.id === id)
+    const locked = summary?.status === 'submitted' || summary?.status === 'accepted'
+    if (locked && !window.confirm(
+      'Ca này đã được khoá là bản đã nộp. Xoá là mất hẳn trên thiết bị này, không khôi phục được. Vẫn xoá?',
+    )) {
+      setMenuFor(null)
+      return
+    }
     await deleteCase(id)
     setMenuFor(null)
     toast('Đã xóa ca lâm sàng.')
@@ -153,6 +188,23 @@ export function HomeScreen({ navigate }: { navigate: (r: Route) => void }) {
             </div>
             <Badge tone="brand">{cases.length} ca</Badge>
           </div>
+
+          {/*
+            The reflection screen asks for keywords "để sau này tìm lại các ca
+            cùng chủ đề", which was a promise with nothing behind it. This is
+            what makes it true: a plain filter over the list already in memory —
+            no index, no network, and it keeps working offline.
+          */}
+          {cases.length > 2 && (
+            <div style={{ marginTop: 12 }}>
+              <TextInput
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Tìm theo tên ca, lý do khám, chẩn đoán hoặc từ khóa…"
+                aria-label="Tìm ca lâm sàng"
+              />
+            </div>
+          )}
         </Card>
 
         {loading ? (
@@ -173,7 +225,12 @@ export function HomeScreen({ navigate }: { navigate: (r: Route) => void }) {
         ) : (
           <Card className="card--pad0 card--flat">
             <div className="list">
-              {cases.map((c) => (
+              {shown.length === 0 && (
+                <p className="small muted" style={{ padding: 'var(--sp-4)' }}>
+                  Không có ca nào khớp “{query}”.
+                </p>
+              )}
+              {shown.map((c) => (
                 <div key={c.id} className="list__item" style={{ cursor: 'default' }}>
                   <button
                     type="button"

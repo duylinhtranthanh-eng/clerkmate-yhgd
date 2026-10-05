@@ -191,7 +191,11 @@ function LifeCycleCard({
         className="btn btn--secondary btn--sm"
         onClick={() => setExpanded((v) => !v)}
       >
-        {expanded ? 'Ẩn danh sách 8 giai đoạn' : current ? 'Chọn giai đoạn khác' : 'Chọn thủ công'}
+        {expanded
+          ? `Ẩn danh sách ${FAMILY_LIFE_CYCLE_STAGES.length} giai đoạn`
+          : current
+            ? 'Chọn giai đoạn khác'
+            : 'Chọn thủ công'}
       </button>
 
       {expanded && (

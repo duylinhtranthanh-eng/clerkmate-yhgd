@@ -135,7 +135,15 @@ export function DepartmentForm({
             <F label="Số hồ sơ" value={p.fileNumber} />
             <F label="Mã số" value={p.caseLabel} />
             <F label="Tên" value={p.name} />
-            <F label="Tuổi" value={p.ageYears !== null ? String(p.ageYears) : ''} />
+            <F
+              label="Tuổi"
+              value={[
+                p.ageYears !== null ? String(p.ageYears) : '',
+                p.dateOfBirth && `sinh ${p.dateOfBirth}`,
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+            />
             <F label="Giới tính" value={p.sex !== 'unknown' ? SEX_LABEL[p.sex] : ''} />
             <F label="Địa chỉ" value={p.address} />
             <F label="Nghề nghiệp" value={p.occupation} />
@@ -480,11 +488,11 @@ export function DepartmentForm({
               </thead>
               <tbody>
                 <tr>
-                  <td />
-                  <td />
-                  <td />
-                  <td />
-                  <td />
+                  <td>{follow?.pulse}</td>
+                  <td>{follow?.bloodPressure}</td>
+                  <td>{follow?.weightKg}</td>
+                  <td>{follow?.heightCm}</td>
+                  <td>{follow?.bmi}</td>
                 </tr>
               </tbody>
             </table>
@@ -500,8 +508,8 @@ export function DepartmentForm({
             <F label="Đáp ứng điều trị: Sau thời gian" value={follow?.treatmentResponse} />
             <F label="Triệu chứng" value={follow?.subjective} />
             <F label="Thực thể" value={follow?.objective} />
-            <F label="Không đáp ứng điều trị: Sau thời gian" />
-            <F label="Than phiền" />
+            <F label="Không đáp ứng điều trị: Sau thời gian" value={follow?.noResponseAfter} />
+            <F label="Than phiền" value={follow?.complaint} />
             <F label="Chuyển khám chuyên khoa" block value={referralText(record)} />
             <F label="Tham vấn" block value={record.prevention.counselling} />
           </div>
@@ -536,7 +544,7 @@ export function DepartmentForm({
               }
             />
             <F label="Toa" block value={meds.map((m) => m.name).join('; ')} />
-            <F label="Ý kiến chuyên khoa: BS" block />
+            <F label="Ý kiến chuyên khoa: BS" block value={follow?.specialistOpinion} />
           </div>
           <div className="dept-cell dept-cell--flush">
             <table className="dept-table">

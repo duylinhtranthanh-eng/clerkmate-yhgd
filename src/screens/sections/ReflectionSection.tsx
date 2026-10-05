@@ -102,7 +102,7 @@ export function ReflectionSection({ record, update }: SectionProps) {
         )}
       </Card>
 
-      <Card title="Từ khóa" hint="Để sau này tìm lại các ca cùng chủ đề.">
+      <Card title="Từ khóa" hint="Gõ từ khóa vào ô tìm kiếm ở màn hình chính để lọc các ca cùng chủ đề.">
         <div style={{ display: 'flex', gap: 8 }}>
           <TextInput
             value={newTag}

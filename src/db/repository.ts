@@ -27,6 +27,8 @@ function toSummary(c: CaseRecord): CaseSummary {
     percent: completeness.percent,
     status: caseStatus(c, completeness),
     hasUnreadReview: unreadReviews(c).length > 0,
+    tags: c.reflection.tags,
+    diagnosis: c.diagnosis.primary?.label ?? '',
   }
 }
 
