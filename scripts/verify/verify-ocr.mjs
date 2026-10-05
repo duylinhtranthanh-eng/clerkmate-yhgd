@@ -243,6 +243,16 @@ const { nodeId } = await S('DOM.querySelector', {
   selector: 'input[type=file][accept="image/*"]',
 })
 check('the camera input is reachable', nodeId > 0, `nodeId ${nodeId}`)
+
+// The route an evaluator takes, who has no photograph of a laboratory result
+// and should not go and make one. If this is broken the feature is, for them,
+// not there at all.
+const sampleOffered = await ev(`
+  const b = window.__btn('Thử với phiếu mẫu');
+  return Boolean(b && !b.disabled);
+`)
+check('a sample slip is offered to anyone without one', sampleOffered)
+
 if (nodeId > 0) await S('DOM.setFileInputFiles', { nodeId, files: [slipPath] })
 
 check('the review sheet opens on the photograph', await until(`document.querySelector('.sheet')`, 20))
@@ -319,6 +329,34 @@ check('the patient name never entered the record', !/NGUY[ỄE]N V[ĂA]N AN/i.te
   'không có tên trong bệnh án')
 check('no photograph was stored at all', record.attachments === 0 && record.blobs === 0,
   `${record.attachments} đính kèm, ${record.blobs} blob`)
+
+// ------------------------------------------------- the path an evaluator takes
+console.log('\ntrying it with no slip of your own')
+await ev(`
+  const b = window.__btn('Thử với phiếu mẫu');
+  if (b) b.click();
+  return true;
+`)
+const sampleRead = await until(
+  `document.querySelector('.sheet') && /kết quả vào bệnh án|Không nhận ra dòng/.test(window.__txt())`,
+  60,
+  2000,
+)
+check('the sample slip is drawn and read', sampleRead)
+
+const sampleSheet = await ev(`
+  const sheet = document.querySelector('.sheet');
+  const txt = sheet ? sheet.innerText : '';
+  return {
+    idWarning: /dòng chứa thông tin định danh/.test(txt),
+    analytes: ['Glucose', 'Cholesterol', 'Creatinin'].filter((n) => txt.includes(n)),
+  };
+`)
+check('the sample slip yields analytes', sampleSheet.analytes.length >= 2,
+  sampleSheet.analytes.join(', '))
+// The sample prints the identifier band real Vietnamese forms print, so the
+// evaluator sees the app refuse it rather than being told it would.
+check('the sample slip shows the identity band being refused', sampleSheet.idWarning)
 
 const appHost = new URL(BASE).host
 const foreign = [...new Set(requestHosts)].filter((h) => h && h !== appHost)

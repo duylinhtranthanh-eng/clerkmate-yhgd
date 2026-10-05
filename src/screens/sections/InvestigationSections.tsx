@@ -26,7 +26,7 @@ import { RedactEditor } from '../../components/RedactEditor'
 import { OcrSheet } from '../../components/OcrSheet'
 import type { ParsedResult } from '../../ocr/labLines'
 import { makeThumbnail, neutralAttachmentName, sanitizeImage } from '../../utils/image'
-import { buildSampleAttachment } from '../../config/demoCases/demoAttachments'
+import { buildSampleAttachment, buildSampleSlipImage } from '../../config/demoCases/demoAttachments'
 import { uid } from '../../utils/id'
 import { todayIso } from '../../utils/format'
 import { useToast } from '../../components/Toast'
@@ -485,8 +485,20 @@ function LabPhotoImport({
 }) {
   const [image, setImage] = useState<Blob | null>(null)
   const [open, setOpen] = useState(false)
+  const [sampling, setSampling] = useState(false)
   const toast = useToast()
   const locked = record.submission.locked
+
+  const trySample = async () => {
+    if (locked) return
+    setSampling(true)
+    try {
+      setImage(await buildSampleSlipImage(record))
+      setOpen(true)
+    } finally {
+      setSampling(false)
+    }
+  }
 
   const importRows = (rows: ParsedResult[]) => {
     update((d) => {
@@ -533,6 +545,20 @@ function LabPhotoImport({
             }}
           />
         </label>
+        {/*
+          Without this, trying the feature requires already having a photograph
+          of a laboratory result — which someone evaluating the app on a laptop
+          does not have, and should not go and create.
+        */}
+        <button
+          type="button"
+          className="btn btn--ghost btn--sm btn--block"
+          style={{ marginTop: 6 }}
+          disabled={locked || sampling}
+          onClick={() => void trySample()}
+        >
+          {sampling ? 'Đang dựng phiếu mẫu…' : 'Không có phiếu trong tay? Thử với phiếu mẫu'}
+        </button>
         <p className="small muted" style={{ margin: '6px 0 0' }}>
           Ảnh chỉ nằm trong bộ nhớ máy để đọc chữ, <strong>không được lưu vào bệnh án</strong> — nên
           không có gì phải che.

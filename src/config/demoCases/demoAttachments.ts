@@ -230,6 +230,35 @@ export async function buildSampleAttachment(record: CaseRecord): Promise<DemoAtt
   })
 }
 
+/**
+ * The same slip, as a bare image, for trying the recogniser.
+ *
+ * Reading a photographed slip cannot be tried without a photographed slip, and
+ * the people most likely to want to try it — a teacher evaluating the app, a
+ * judge at a laptop — are exactly the people with no laboratory result to hand
+ * and no reason to photograph a real patient's one. So the app draws a slip with
+ * the identifier band Vietnamese forms actually print, hands it to the
+ * recogniser, and lets them watch what happens to the name.
+ *
+ * Returns the image only. Nothing is attached to the record, because the point
+ * of this route is that no image is kept.
+ */
+export async function buildSampleSlipImage(record: CaseRecord): Promise<Blob> {
+  const slip = drawLabSlip(
+    [
+      ['Glucose (đói)', '7,8 mmol/L', '3,9 — 5,6'],
+      ['HbA1c', '6,9 %', '< 5,7'],
+      ['Cholesterol toàn phần', '5,9 mmol/L', '< 5,2'],
+      ['LDL-C', '3,6 mmol/L', '< 3,0'],
+      ['Triglyceride', '1,4 mmol/L', '< 1,7'],
+      ['Creatinin', '82 µmol/L', '62 — 106'],
+    ],
+    'KẾT QUẢ SINH HÓA MÁU',
+    slipPatientFrom(record),
+  )
+  return canvasToBlob(slip)
+}
+
 /** Elderly case: already redacted, showing what a finished attachment looks like. */
 export async function buildElderlyAttachments(record: CaseRecord): Promise<DemoAttachment[]> {
   const slip = redactBand(
