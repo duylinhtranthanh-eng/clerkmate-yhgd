@@ -295,7 +295,7 @@ if (process.env.OCR_SHOT) {
 }
 check('identity lines are called out, not quietly dropped', sheetState.idWarning)
 check('the analytes are offered', sheetState.hasGlucose)
-check('a value outside the printed interval is marked abnormal', sheetState.abnormalBadge)
+check('the sheet still shows what the printed interval implies', sheetState.abnormalBadge)
 
 await ev(`
   const b = window.__btn('kết quả vào bệnh án');
@@ -322,7 +322,15 @@ const record = await ev(`
 `)
 check('the numbers are in the record', record.names.some((n) => /Glucose/i.test(n)),
   record.names.join(', '))
-check('the abnormal flag came across', record.flags.includes('abnormal'), record.flags.join('|'))
+// Deliberately the opposite of what it used to assert.
+//
+// The flag is derived from the reference interval the recogniser read off the
+// image, and reading digits off a photograph goes wrong: one lost comma turns
+// "< 5,2" into "< 52", and an abnormal cholesterol arrives wearing a green
+// label. A learner catches a wrong number; they do not catch a wrong label. So
+// the numbers import and the flag does not.
+check('no flag is written into the record from what the machine read',
+  record.flags.every((f) => f === ''), record.flags.map((f) => f || '—').join('|'))
 
 // The two checks this feature exists for.
 check('the patient name never entered the record', !/NGUY[ỄE]N V[ĂA]N AN/i.test(record.json),

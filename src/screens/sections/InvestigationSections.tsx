@@ -511,7 +511,15 @@ function LabPhotoImport({
           unit: row.unit,
           // The flag only carries over when the slip printed an interval to
           // justify it. Everything else is left for the learner to decide.
-          flag: row.flag === 'abnormal' ? 'abnormal' : row.flag === 'normal' ? 'normal' : '',
+          // Cố tình để trống.
+          //
+          // Cờ bình thường / bất thường suy ra từ khoảng tham chiếu mà máy đọc
+          // được, mà máy đọc chữ số trên ảnh thì sai là chuyện thường: một dấu
+          // phẩy mất đi biến "< 5,2" thành "< 52", và một cholesterol bất
+          // thường được gắn nhãn xanh. Số thì người học nhìn ra sai ngay; một
+          // cái nhãn "bình thường" thì không. Nên app đưa số vào, còn cờ để
+          // người học tự đặt sau khi nhìn tờ phiếu.
+          flag: '',
           interpretation: '',
           attachmentId: null,
         })
@@ -519,7 +527,7 @@ function LabPhotoImport({
     })
     setOpen(false)
     setImage(null)
-    toast(`Đã thêm ${rows.length} kết quả. Ảnh không được lưu — nhớ viết lý giải cho từng dòng.`)
+    toast(`Đã thêm ${rows.length} kết quả. Ảnh không được lưu. Cờ bình thường/bất thường bạn tự đặt sau khi đối chiếu phiếu.`)
   }
 
   return (
@@ -666,7 +674,7 @@ function ResultImage({
         target.name = rows[0].name
         target.value = rows[0].value
         target.unit = rows[0].unit
-        if (rows[0].flag) target.flag = rows[0].flag
+        // Không đặt cờ — xem lý do ở `LabPhotoImport`.
         rest = rows.slice(1)
       }
       for (const row of rest) {
@@ -676,7 +684,7 @@ function ResultImage({
           date: result.date || todayIso(),
           value: row.value,
           unit: row.unit,
-          flag: row.flag === 'abnormal' ? 'abnormal' : row.flag === 'normal' ? 'normal' : '',
+          flag: '',
           interpretation: '',
           attachmentId: null,
         })

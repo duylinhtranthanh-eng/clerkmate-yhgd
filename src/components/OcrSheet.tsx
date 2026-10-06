@@ -217,6 +217,18 @@ export function OcrSheet({
                 Đọc xong trong {(elapsed / 1000).toFixed(1)} giây. Kiểm lại số trước khi thêm — máy
                 đọc sai chữ số là chuyện thường.
               </p>
+              {/*
+                Nói thẳng giới hạn của cái cờ, ngay cạnh chỗ nó hiện ra.
+
+                Cờ suy từ khoảng tham chiếu mà máy đọc được trên ảnh. Một dấu
+                phẩy mất đi là "< 5,2" thành "< 52", và một kết quả bất thường
+                đeo nhãn xanh. Số sai thì người học nhìn ra; nhãn sai thì không.
+              */}
+              <Notice tone="info">
+                Cờ bên dưới chỉ suy từ khoảng tham chiếu <strong>máy đọc được</strong> trên ảnh —
+                đọc sai khoảng thì cờ sai theo. App <strong>không ghi cờ vào bệnh án</strong>; bạn
+                tự đặt sau khi đối chiếu tờ phiếu.
+              </Notice>
               <div className="list">
                 {resultLines.map((l) => (
                   <div
