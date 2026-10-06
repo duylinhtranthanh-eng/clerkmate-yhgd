@@ -170,14 +170,62 @@ export function ocrAvailable(): boolean {
  * on a photograph of a printed form, and they are noise in a list a person has
  * to read through.
  */
+/** Dưới ngưỡng này thì chữ số quá nhỏ để đọc chắc; xem `upscale`. */
+const MIN_WIDTH = 1800
+const MAX_SCALE = 3
+
+/**
+ * Phóng to ảnh nhỏ trước khi đọc.
+ *
+ * Đo trên tờ phiếu mẫu của ứng dụng: ở cỡ gốc 760 điểm ảnh, chỉ 1 trong 6 khoảng
+ * tham chiếu đọc đúng — "< 5,7" ra "<57", "< 3,0" ra "<30" — và cả giá trị cũng
+ * sai, "7,8" thành "78". Phóng gấp đôi lên 4/6, gấp ba lên 5/6 và các giá trị
+ * đọc đúng hết. Dấu phẩy thập phân chỉ rộng vài điểm ảnh, nên nó là thứ mất đầu
+ * tiên khi chữ nhỏ — mà mất dấu phẩy thì khoảng tham chiếu sai gấp mười lần.
+ *
+ * Chỉ phóng ảnh nhỏ. Ảnh chụp từ máy ảnh điện thoại vốn đã vài nghìn điểm ảnh,
+ * phóng thêm chỉ tốn bộ nhớ chứ không thêm chi tiết nào.
+ */
+async function upscale(image: Blob): Promise<Blob> {
+  if (typeof createImageBitmap !== 'function') return image
+  let bitmap: ImageBitmap
+  try {
+    bitmap = await createImageBitmap(image)
+  } catch {
+    return image
+  }
+  const scale = Math.min(MAX_SCALE, MIN_WIDTH / bitmap.width)
+  if (!(scale > 1)) {
+    bitmap.close()
+    return image
+  }
+  const canvas = document.createElement('canvas')
+  canvas.width = Math.round(bitmap.width * scale)
+  canvas.height = Math.round(bitmap.height * scale)
+  const ctx = canvas.getContext('2d')
+  if (!ctx) {
+    bitmap.close()
+    return image
+  }
+  ctx.imageSmoothingEnabled = true
+  ctx.imageSmoothingQuality = 'high'
+  ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
+  bitmap.close()
+  const bigger = await new Promise<Blob | null>((resolve) =>
+    canvas.toBlob((b) => resolve(b), 'image/png'),
+  )
+  return bigger ?? image
+}
+
 export async function recognizeImage(image: Blob, onProgress?: OcrProgress): Promise<OcrOutcome> {
   if (!ocrAvailable()) throw new Error('Trình duyệt này không chạy được nhận dạng chữ.')
   const started = performance.now()
+  const prepared = await upscale(image)
   const worker = await getWorker(onProgress)
   // `blocks` has to be asked for: without it the result carries the page text
   // and nothing else, and the per-line confidence that tells a learner which
   // rows to look at twice is simply absent.
-  const { data } = await worker.recognize(image, {}, { blocks: true, text: true })
+  const { data } = await worker.recognize(prepared, {}, { blocks: true, text: true })
 
   const fromBlocks = (data.blocks ?? []).flatMap((b) =>
     (b.paragraphs ?? []).flatMap((p) => p.lines ?? []),

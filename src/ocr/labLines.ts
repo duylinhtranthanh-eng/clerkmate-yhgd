@@ -126,6 +126,22 @@ function looksLikeReference(text: string): boolean {
  * nothing is correct here; a wrong "bình thường" beside an abnormal potassium
  * is the kind of error this whole app exists to avoid.
  */
+/**
+ * Khoảng cách đủ lớn để nghi là máy đọc mất dấu phẩy thập phân.
+ *
+ * "< 5,7" đọc thành "< 57" thì cái ngưỡng nhảy lên gấp mười. Một kết quả thật
+ * lệch mười lần so với ngưỡng là chuyện hiếm; một dấu phẩy bị nuốt thì không
+ * hiếm chút nào. Gặp khoảng cách cỡ đó thì app không kết luận gì — im lặng vẫn
+ * đúng hơn là dán nhãn sai.
+ */
+const IMPLAUSIBLE = 10
+
+function suspicious(value: number, bound: number): boolean {
+  if (bound === 0 || value === 0) return false
+  const ratio = value / bound
+  return ratio >= IMPLAUSIBLE || ratio <= 1 / IMPLAUSIBLE
+}
+
 export function flagAgainstReference(value: string, reference: string): ParsedResult['flag'] {
   const v = toNumber(value)
   if (v === null || !reference.trim()) return ''
@@ -135,19 +151,22 @@ export function flagAgainstReference(value: string, reference: string): ParsedRe
     const low = toNumber(between[1])
     const high = toNumber(between[2])
     if (low === null || high === null || low >= high) return ''
+    if (suspicious(v, low) && suspicious(v, high)) return ''
     return v < low || v > high ? 'abnormal' : 'normal'
   }
 
   const below = reference.match(RANGE_BELOW)
   if (below) {
     const limit = toNumber(below[1])
-    return limit === null ? '' : v >= limit ? 'abnormal' : 'normal'
+    if (limit === null || suspicious(v, limit)) return ''
+    return v >= limit ? 'abnormal' : 'normal'
   }
 
   const above = reference.match(RANGE_ABOVE)
   if (above) {
     const limit = toNumber(above[1])
-    return limit === null ? '' : v <= limit ? 'abnormal' : 'normal'
+    if (limit === null || suspicious(v, limit)) return ''
+    return v <= limit ? 'abnormal' : 'normal'
   }
 
   return ''
@@ -161,7 +180,12 @@ export function parseResultLine(text: string): ParsedResult | null {
   const name = m.groups.name.trim().replace(/[:\-–]+$/, '').trim()
   const value = m.groups.value.replace(/\s+/g, '')
   const unit = (m.groups.unit ?? '').trim()
-  const reference = (m.groups.reference ?? '').trim()
+  // Đơn vị đọc hỏng — "mmol/L" ra "mmo 1 /1" — thì nó rơi vào phần đuôi và hiện
+  // ra như rác ngay cạnh khoảng tham chiếu. Khi đuôi có chứa một khoảng thật,
+  // cắt bỏ mọi thứ đứng trước nó.
+  const tail = (m.groups.reference ?? '').trim()
+  const at = tail.search(/[<>≤≥]\s*\d|\d{1,6}(?:[.,]\d{1,3})?\s*[-–—]\s*\d/)
+  const reference = at > 0 ? tail.slice(at).trim() : tail
 
   // Without a unit, the only thing that makes a row a result is a printed
   // reference interval. Accepting any trailing text instead would read

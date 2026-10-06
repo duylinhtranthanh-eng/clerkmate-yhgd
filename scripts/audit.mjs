@@ -881,6 +881,20 @@ t('the flag comes from the printed interval, never from the analyte name', () =>
   eq(M.parseResultLine('Glucose 11,2 mmol/L').flag, '')
 })
 
+t('a reference the machine probably misread yields no flag at all', () => {
+  // "< 1,7" đọc thành "< 17": giữ nguyên cờ thì triglyceride 1,4 thành "bình
+  // thường" theo một ngưỡng không có thật.
+  eq(M.flagAgainstReference('1,4', '< 17'), '')
+  eq(M.flagAgainstReference('3,6', '< 40'), '')
+  eq(M.flagAgainstReference('5,7', '< 57'), '')
+  // Lệch vừa phải thì vẫn kết luận — đây mới là kết quả bất thường thật.
+  eq(M.flagAgainstReference('7,8', '< 5,7'), 'abnormal')
+  eq(M.flagAgainstReference('11,2', '3,9 - 6,4'), 'abnormal')
+  eq(M.flagAgainstReference('5,6', '3,9 - 6,4'), 'normal')
+  // Cả hai đầu khoảng đều lệch chục lần thì mới nghi; một đầu thôi thì không.
+  eq(M.flagAgainstReference('82', '62 - 106'), 'normal')
+})
+
 t('a whole slip classifies into identity, results and the rest', () => {
   const slip = [
     'PHÒNG KHÁM ĐA KHOA',
